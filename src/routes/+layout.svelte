@@ -14,7 +14,6 @@
 
 	// State management
 	let sidebarOpen = $state(true);
-	let isLoggedIn = $state(false);
 	let historyItems = $state<HistoryItem[]>([
 		{ id: 1, name: 'facebook/react', date: '2024-11-08' },
 		{ id: 2, name: 'microsoft/vscode', date: '2024-11-07' },
@@ -64,7 +63,7 @@
 			</div>
 
 			<!-- Right: Avatar Component -->
-			<Avatar bind:isLoggedIn />
+			<Avatar />
 		</header>
 
 		<!-- Page Content -->

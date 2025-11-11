@@ -1,22 +1,35 @@
 <script lang="ts">
 	import { X, Github } from 'lucide-svelte';
+	import { signInWithGithub, user } from '$lib/utils/auth';
+	import { goto } from '$app/navigation';
 
 	interface Props {
 		show?: boolean;
 		mode?: 'login' | 'register';
 		onClose?: () => void;
-		onGithubAuth?: () => void;
 	}
 
-	let { show = false, mode = 'login', onClose, onGithubAuth }: Props = $props();
+	let { show = false, mode = 'login', onClose }: Props = $props();
 
-	function handleGithubClick() {
-		onGithubAuth?.();
+	async function handleGithubClick() {
+		try {
+			await signInWithGithub();
+			onClose?.();
+		} catch (error) {
+			console.error('Authentication failed:', error);
+		}
 	}
 
 	function handleClose() {
 		onClose?.();
 	}
+
+	// If already logged in, redirect to dashboard
+	$effect(() => {
+		if ($user) {
+			goto('/dashboard');
+		}
+	});
 </script>
 
 {#if show}
