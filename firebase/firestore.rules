@@ -12,63 +12,34 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    function isScanOwner(scanData) {
-      return scanData.userId == null || isOwner(scanData.userId);
-    }
-    
     // Users collection
     match /users/{userId} {
+      // Users can read their own document
       allow read: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if false; // Don't allow user deletion through Firestore
-      
-      // User history subcollection
-      match /history/{historyId} {
-        allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
-      }
+      // Only server can write (via Admin SDK through /api/auth/signin)
+      allow write: if false;
     }
     
     // Scans collection
     match /scans/{scanId} {
-      // Allow read if:
-      // 1. Scan is public, OR
-      // 2. User is the owner (authenticated or anonymous via session)
-      allow read: if resource.data.isPublic == true 
-                  || isScanOwner(resource.data);
-      
-      // Allow create if:
-      // 1. Authenticated user, OR
-      // 2. Anonymous user (userId is null)
-      allow create: if isAuthenticated() 
-                    || request.resource.data.userId == null;
-      
-      // Allow update/delete only if owner
-      allow update: if isScanOwner(resource.data);
-      allow delete: if isScanOwner(resource.data);
-    }
-    
-    // Results collection
-    match /results/{resultId} {
-      // Results have same permission as their corresponding scan
-      allow read: if exists(/databases/$(database)/documents/scans/$(resultId)) 
-                  && (get(/databases/$(database)/documents/scans/$(resultId)).data.isPublic == true
-                      || isScanOwner(get(/databases/$(database)/documents/scans/$(resultId)).data));
-      
-      // Only server can write results
+      // Users can only read their own scans
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // Only server can write (via Admin SDK through API endpoints)
       allow write: if false;
     }
     
-    // Quotas collection (server-only)
-    match /quotas/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if false; // Server-only writes
+    // Repository collection (shared analysis results)
+    match /repository/{repoId} {
+      // Anyone can read repository analysis results (public sharing feature)
+      allow read: if true;
+      // Only server can write (via Admin SDK)
+      allow write: if false;
     }
     
-    // Anonymous rate limits (server-only)
-    match /anonymous_limits/{ipHash} {
-      allow read, write: if false; // Server-only
+    // Anonymous users collection (for IP-based rate limiting)
+    match /anonymous_users/{hashedIp} {
+      // Server-only access for rate limiting
+      allow read, write: if false;
     }
   }
 }
