@@ -1,20 +1,60 @@
 <script lang="ts">
-	import { House, History, Search, PanelLeftClose } from 'lucide-svelte';
-
-	interface HistoryItem {
-		id: number;
-		name: string;
-		date: string;
-	}
+	import { House, History, Search, PanelLeftClose, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-svelte';
+	import type { Scan } from '$lib/schema/scan';
+	import type { Timestamp } from '$lib/schema/utils';
 
 	interface Props {
 		open?: boolean;
-		items?: HistoryItem[];
-		onItemClick?: (item: HistoryItem) => void;
+		scanHistory?: Scan[];
+		onScanItemClick?: (scan: Scan) => void;
 		onToggle?: () => void;
 	}
 
-	let { open = $bindable(true), items = [], onItemClick, onToggle }: Props = $props();
+	let { open = $bindable(true), scanHistory = [], onScanItemClick, onToggle }: Props = $props();
+
+	// Helper function to get status icon and color
+	function getStatusInfo(status: Scan['status']) {
+		switch (status) {
+			case 'succeeded':
+				return { icon: CheckCircle2, color: 'text-green-500' };
+			case 'failed':
+				return { icon: XCircle, color: 'text-red-500' };
+			case 'running':
+				return { icon: Loader2, color: 'text-blue-500 animate-spin' };
+			case 'queued':
+				return { icon: Clock, color: 'text-gray-400' };
+			default:
+				return { icon: Search, color: 'text-gray-400' };
+		}
+	}
+
+	// Format date to relative time or absolute
+	function formatDate(timestamp: Timestamp): string {
+		let date: Date;
+		
+		// Convert Firestore Timestamp to Date if needed
+		if (timestamp instanceof Date) {
+			date = timestamp;
+		} else if (typeof timestamp === 'object' && 'seconds' in timestamp) {
+			// Firestore Timestamp format
+			date = new Date(timestamp.seconds * 1000);
+		} else {
+			// Fallback
+			date = new Date(timestamp as any);
+		}
+		
+		const now = new Date();
+		const diffMs = now.getTime() - date.getTime();
+		const diffMins = Math.floor(diffMs / 60000);
+		const diffHours = Math.floor(diffMs / 3600000);
+		const diffDays = Math.floor(diffMs / 86400000);
+
+		if (diffMins < 1) return 'Just now';
+		if (diffMins < 60) return `${diffMins} mins ago`;
+		if (diffHours < 24) return `${diffHours} hours ago`;
+		if (diffDays < 7) return `${diffDays} days ago`;
+		return date.toLocaleDateString('en-US');
+	}
 </script>
 
 <aside
@@ -45,24 +85,35 @@
 				class="flex items-center gap-2 mb-3 px-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase"
 			>
 				<History class="w-4 h-4" />
-				<span>History</span>
+				<span>Scan History</span>
 			</div>
 			<div class="space-y-1">
-				{#each items as item (item.id)}
-					<button
-						onclick={() => onItemClick?.(item)}
-						class="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
-					>
-						<Search class="w-4 h-4 shrink-0" />
-						<div class="flex-1 text-left truncate">
-							<div class="font-medium truncate">{item.name}</div>
-							<div class="text-xs text-gray-500 dark:text-gray-400">{item.date}</div>
-						</div>
-					</button>
-				{/each}
+				{#if scanHistory.length === 0}
+					<div class="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+						No scan records found
+					</div>
+				{:else}
+					{#each scanHistory as scan (scan.scanId)}
+						{@const statusInfo = getStatusInfo(scan.status)}
+						{@const StatusIcon = statusInfo.icon}
+						<button
+							onclick={() => onScanItemClick?.(scan)}
+							class="w-full flex items-start gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
+						>
+							<StatusIcon class="w-4 h-4 shrink-0 mt-0.5 {statusInfo.color}" />
+							<div class="flex-1 text-left min-w-0">
+								<div class="font-medium truncate">{scan.repoId}</div>
+								<div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+									<span>{formatDate(scan.createdAt)}</span>
+									{#if scan.status === 'running' && scan.progress > 0}
+										<span>• {scan.progress}%</span>
+									{/if}
+								</div>
+							</div>
+						</button>
+					{/each}
+				{/if}
 			</div>
 		</div>
 	</div>
 </aside>
-
-

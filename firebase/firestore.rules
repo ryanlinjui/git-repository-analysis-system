@@ -12,7 +12,7 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // Users collection
+    // Users collection (minimal data, most info from Firebase Auth)
     match /users/{userId} {
       // Users can read their own document
       allow read: if isOwner(userId);

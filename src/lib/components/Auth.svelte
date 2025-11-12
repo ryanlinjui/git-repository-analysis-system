@@ -1,15 +1,13 @@
 <script lang="ts">
 	import { X, Github } from 'lucide-svelte';
-	import { signInWithGithub, user } from '$lib/utils/auth';
-	import { goto } from '$app/navigation';
+	import { signInWithGithub, firebaseUser } from '$lib/stores/auth';
 
 	interface Props {
 		show?: boolean;
-		mode?: 'login' | 'register';
 		onClose?: () => void;
 	}
 
-	let { show = false, mode = 'login', onClose }: Props = $props();
+	let { show = false, onClose }: Props = $props();
 
 	async function handleGithubClick() {
 		try {
@@ -24,15 +22,16 @@
 		onClose?.();
 	}
 
-	// If already logged in, redirect to dashboard
+	// Close modal if user is already logged in
 	$effect(() => {
-		if ($user) {
-			goto('/dashboard');
+		if ($firebaseUser && show) {
+			onClose?.();
 		}
 	});
 </script>
 
 {#if show}
+	<!-- Show Auth Windows -->
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-s animate-in fade-in duration-200"
 		role="presentation"
@@ -43,7 +42,6 @@
 			role="dialog"
 			aria-modal="true"
 		>
-			<!-- Header with minimal style -->
 			<div class="relative bg-gray-200 dark:bg-gray-850 p-8 text-center border-b border-gray-200 dark:border-gray-800">
 				<button
 					onclick={handleClose}
@@ -65,7 +63,6 @@
 				</p>
 			</div>
 
-			<!-- Content -->
 			<div class="p-8">
 				<div class="space-y-4">
 					<!-- GitHub Button -->

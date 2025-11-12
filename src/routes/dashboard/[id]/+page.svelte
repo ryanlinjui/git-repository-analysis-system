@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { User } from 'lucide-svelte';
+	import { User as UserIcon } from 'lucide-svelte';
+	import { user } from '$lib/stores/auth';
+	import type { PageData } from './$types';
 
-	// Mock user data - will fetch from server later
-	let user = $state({
-		id: 'ryanlinjui',
-		name: 'Ryan Lin',
-		avatar: null // null means using default avatar
-	});
+	interface Props {
+		data: PageData;
+	}
+
+	let { data }: Props = $props();
 </script>
 
 <div class="max-w-4xl mx-auto px-4 py-12">
@@ -17,26 +18,28 @@
 	</div>
 
 	<!-- User Profile Card -->
-	<div class="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-800 p-8">
-		<div class="flex items-center gap-6">
-			<!-- Avatar -->
-			<div class="w-24 h-24 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shrink-0">
-				{#if user.avatar}
-					<img src={user.avatar} alt={user.name} class="w-full h-full rounded-full object-cover" />
-				{:else}
-					<User class="w-12 h-12" />
-				{/if}
-			</div>
+	{#if $user}
+		<div class="bg-white dark:bg-gray-900 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-800 p-8">
+			<div class="flex items-center gap-6">
+				<!-- Avatar -->
+				<div class="w-24 h-24 rounded-full bg-linear-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white shrink-0 overflow-hidden">
+					{#if $user.photoURL}
+						<img src={$user.photoURL} alt={$user.displayName} class="w-full h-full object-cover" />
+					{:else}
+						<UserIcon class="w-12 h-12" />
+					{/if}
+				</div>
 
-			<!-- User Info -->
-			<div class="flex-1">
-				<h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">{user.name}</h2>
-				<p class="text-gray-600 dark:text-gray-400 flex items-center gap-2">
-					<span class="text-sm font-mono">@{user.id}</span>
-				</p>
+				<!-- User Info -->
+				<div class="flex-1">
+					<h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">{$user.displayName}</h2>
+					<p class="text-gray-600 dark:text-gray-400 flex items-center gap-2">
+						<span class="text-sm font-mono">{$user.email}</span>
+					</p>
+				</div>
 			</div>
 		</div>
-	</div>
+	{/if}
 
 	<!-- Stats Cards (optional, will expand later) -->
 	<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
