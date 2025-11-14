@@ -4,45 +4,20 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { isLoggedIn } from '$lib/stores/auth';
-	import { scanHistory } from '$lib/stores/history';
-	import { goto } from '$app/navigation';
-	import type { Scan } from '$lib/schema/scan';
 
 	let { children } = $props();
 
-	// State management
-	let sidebarOpen = $state(false);
-
-	// Auto-open sidebar when user logs in
-	$effect(() => {
-		if ($isLoggedIn) {
-			sidebarOpen = true;
-		} else {
-			sidebarOpen = false;
-		}
-	});
+	let sidebarOpen = $state(true);
 
 	function toggleSidebar() {
-		// Only allow toggle if logged in
-		if ($isLoggedIn) {
-			sidebarOpen = !sidebarOpen;
-		}
-	}
-
-	function handleScanItemClick(scan: Scan) {
-		goto(`/repository/${scan.repoId}`);
+		sidebarOpen = !sidebarOpen;
 	}
 </script>
 
 <div class="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
 	<!-- Sidebar Component - Only show if logged in -->
 	{#if $isLoggedIn}
-		<Sidebar 
-			bind:open={sidebarOpen} 
-			scanHistory={$scanHistory} 
-			onScanItemClick={handleScanItemClick} 
-			onToggle={toggleSidebar} 
-		/>
+		<Sidebar bind:open={sidebarOpen} />
 	{/if}
 
 	<!-- Top Content Area -->
