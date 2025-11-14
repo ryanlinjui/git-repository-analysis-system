@@ -2,28 +2,88 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
 import path from 'path';
-import type { RepoMetadata, FileInfo } from './types';
+import type { Repository } from '$lib/schema/repository';
+import type { FileInfo, RepoSnapshot } from './constants';
+import { 
+	GIT_PROVIDER_PATTERNS, 
+	GIT_PROVIDER_API, 
+	IGNORE_PATTERNS
+} from './constants';
 
 const execAsync = promisify(exec);
 
 /**
- * Parse GitHub URL to get owner and repo name
+ * Parse Git repository URL to get provider, owner and repo name
+ * Supports GitHub, GitLab, Bitbucket, and any Git server
+ * Includes security validation to prevent SSRF attacks
  */
-export function parseGitHubUrl(url: string): { owner: string; name: string } | null {
-	// Support various GitHub URL formats
-	const patterns = [
-		/github\.com\/([^\/]+)\/([^\/\.]+)(\.git)?$/,
-		/github\.com\/([^\/]+)\/([^\/]+)/
+export function parseGitUrl(url: string): { 
+	provider: 'github' | 'gitlab' | 'bitbucket' | 'other'; 
+	owner: string; 
+	name: string;
+	host?: string; // For self-hosted instances
+} | null {
+	// Security: Validate URL format
+	if (!url || typeof url !== 'string') {
+		return null;
+	}
+
+	// Security: Prevent localhost and private IP addresses (SSRF protection)
+	const BLOCKED_HOSTS = [
+		/localhost/i,
+		/127\.0\.0\./,
+		/192\.168\./,
+		/10\.\d+\.\d+\.\d+/,
+		/172\.(1[6-9]|2[0-9]|3[0-1])\./,
+		/0\.0\.0\.0/,
+		/::1/,
+		/file:\/\//i
 	];
 
-	for (const pattern of patterns) {
-		const match = url.match(pattern);
-		if (match) {
-			return {
-				owner: match[1],
-				name: match[2].replace('.git', '')
-			};
+	if (BLOCKED_HOSTS.some(pattern => pattern.test(url))) {
+		console.warn('Blocked potentially dangerous URL:', url);
+		return null;
+	}
+
+	// Security: Must use HTTPS or SSH
+	if (!url.startsWith('https://') && !url.startsWith('git@')) {
+		console.warn('URL must use HTTPS or SSH protocol');
+		return null;
+	}
+
+	// Security: Check URL length (prevent DoS)
+	if (url.length > 500) {
+		console.warn('URL too long');
+		return null;
+	}
+
+	// Try known providers first
+	for (const [provider, patterns] of Object.entries(GIT_PROVIDER_PATTERNS)) {
+		for (const pattern of patterns) {
+			const match = url.match(pattern);
+			if (match) {
+				return {
+					provider: provider as 'github' | 'gitlab' | 'bitbucket',
+					owner: match[1],
+					name: match[2].replace('.git', '')
+				};
+			}
 		}
+	}
+
+	// Fallback: Try to parse any Git URL (including self-hosted)
+	// Pattern: http(s)://domain/owner/repo or git@domain:owner/repo
+	const httpPattern = /https?:\/\/([^\/]+)\/([^\/]+)\/([^\/\.]+)(\.git)?$/;
+	const sshPattern = /git@([^:]+):([^\/]+)\/([^\/\.]+)(\.git)?$/;
+	
+	let match = url.match(httpPattern) || url.match(sshPattern);
+	if (match) {
+		return {
+			provider: 'other',
+			host: match[1],
+			owner: match[2],
+			name: match[3].replace('.git', '')
+		};
 	}
 
 	return null;
@@ -41,35 +101,89 @@ export async function cloneRepository(repoUrl: string, targetDir: string): Promi
 }
 
 /**
- * Get repository metadata from GitHub API
+ * Fetch repository metadata from Git provider API
+ * Supports GitHub, GitLab, Bitbucket
+ * Returns null for self-hosted or unknown providers
  */
-async function fetchGitHubMetadata(owner: string, name: string): Promise<{
+async function fetchGitMetadata(
+	provider: 'github' | 'gitlab' | 'bitbucket' | 'other',
+	owner: string, 
+	name: string
+): Promise<{
 	stars: number;
 	forks: number;
 	lastUpdated: Date;
 } | null> {
+	// Skip API calls for self-hosted or unknown providers
+	if (provider === 'other') {
+		console.log('   ⚠️  Self-hosted or unknown Git provider - skipping metadata fetch');
+		return null;
+	}
+
 	try {
-		const response = await fetch(`https://api.github.com/repos/${owner}/${name}`, {
-			headers: {
-				'Accept': 'application/vnd.github.v3+json',
-				'User-Agent': 'Git-Repository-Analysis-System'
-			}
-		});
+		let apiUrl: string;
+		let headers: Record<string, string>;
+
+		switch (provider) {
+			case 'github':
+				apiUrl = `${GIT_PROVIDER_API.github}/${owner}/${name}`;
+				headers = {
+					'Accept': 'application/vnd.github.v3+json',
+					'User-Agent': 'Git-Repository-Analysis-System'
+				};
+				break;
+			
+			case 'gitlab':
+				// GitLab uses project ID or URL-encoded path
+				const projectPath = encodeURIComponent(`${owner}/${name}`);
+				apiUrl = `${GIT_PROVIDER_API.gitlab}/${projectPath}`;
+				headers = {
+					'Accept': 'application/json'
+				};
+				break;
+			
+			case 'bitbucket':
+				apiUrl = `${GIT_PROVIDER_API.bitbucket}/${owner}/${name}`;
+				headers = {
+					'Accept': 'application/json'
+				};
+				break;
+		}
+
+		const response = await fetch(apiUrl, { headers });
 
 		if (!response.ok) {
-			console.warn(`Failed to fetch GitHub metadata: ${response.status} ${response.statusText}`);
+			console.warn(`Failed to fetch ${provider} metadata: ${response.status} ${response.statusText}`);
 			return null;
 		}
 
 		const data = await response.json();
 		
-		return {
-			stars: data.stargazers_count || 0,
-			forks: data.forks_count || 0,
-			lastUpdated: new Date(data.updated_at || data.pushed_at)
-		};
+		// Map provider-specific response to common format
+		switch (provider) {
+			case 'github':
+				return {
+					stars: data.stargazers_count || 0,
+					forks: data.forks_count || 0,
+					lastUpdated: new Date(data.updated_at || data.pushed_at)
+				};
+			
+			case 'gitlab':
+				return {
+					stars: data.star_count || 0,
+					forks: data.forks_count || 0,
+					lastUpdated: new Date(data.last_activity_at)
+				};
+			
+			case 'bitbucket':
+				return {
+					stars: 0, // Bitbucket doesn't have stars, only watchers
+					forks: 0, // Would need additional API call
+					lastUpdated: new Date(data.updated_on)
+				};
+		}
 	} catch (error) {
-		console.warn('Failed to fetch GitHub metadata:', error);
+		console.warn(`Failed to fetch ${provider} metadata:`, error);
 		return null;
 	}
 }
@@ -77,11 +191,14 @@ async function fetchGitHubMetadata(owner: string, name: string): Promise<{
 /**
  * Get repository metadata
  */
-export async function getRepoMetadata(repoUrl: string, repoDir: string): Promise<RepoMetadata> {
-	const parsed = parseGitHubUrl(repoUrl);
+export async function getRepoMetadata(
+	repoUrl: string, 
+	repoDir: string
+): Promise<Repository['metadata'] & { owner: string; name: string }> {
+	const parsed = parseGitUrl(repoUrl);
 	
 	if (!parsed) {
-		throw new Error('Invalid GitHub URL');
+		throw new Error('Invalid or unsupported Git repository URL. Supported platforms: GitHub, GitLab, Bitbucket');
 	}
 
 	// Get current commit SHA
@@ -102,21 +219,21 @@ export async function getRepoMetadata(repoUrl: string, repoDir: string): Promise
 		console.warn('Failed to get branch name:', error);
 	}
 
-	// Fetch GitHub metadata
-	console.log(`🔍 Fetching metadata from GitHub API for ${parsed.owner}/${parsed.name}...`);
-	const githubData = await fetchGitHubMetadata(parsed.owner, parsed.name);
+	// Fetch metadata from Git provider API
+	console.log(`🔍 Fetching metadata from ${parsed.provider.toUpperCase()} API for ${parsed.owner}/${parsed.name}...`);
+	const gitData = await fetchGitMetadata(parsed.provider, parsed.owner, parsed.name);
 
 	return {
 		url: repoUrl,
 		owner: parsed.owner,
 		name: parsed.name,
 		fullName: `${parsed.owner}/${parsed.name}`,
-		provider: 'github',
+		provider: parsed.provider,
 		branch,
 		commitSha,
-		stars: githubData?.stars || null,
-		forks: githubData?.forks || null,
-		lastUpdated: githubData?.lastUpdated || null
+		stars: gitData?.stars || null,
+		forks: gitData?.forks || null,
+		lastUpdated: gitData?.lastUpdated || null
 	};
 }
 
@@ -126,18 +243,7 @@ export async function getRepoMetadata(repoUrl: string, repoDir: string): Promise
 export async function getAllFiles(
 	dir: string,
 	baseDir: string = dir,
-	ignorePatterns: RegExp[] = [
-		/node_modules/,
-		/\.git/,
-		/dist/,
-		/build/,
-		/\.next/,
-		/\.cache/,
-		/coverage/,
-		/\.vscode/,
-		/\.idea/,
-		/\.DS_Store/
-	]
+	ignorePatterns: RegExp[] = IGNORE_PATTERNS
 ): Promise<FileInfo[]> {
 	const files: FileInfo[] = [];
 	const entries = await fs.readdir(dir, { withFileTypes: true });
@@ -174,55 +280,6 @@ export async function getAllFiles(
 	}
 
 	return files;
-}
-
-/**
- * Detect language breakdown
- */
-export function detectLanguageBreakdown(files: FileInfo[]): Record<string, number> {
-	const breakdown: Record<string, number> = {};
-	
-	const extensionToLanguage: Record<string, string> = {
-		'.ts': 'TypeScript',
-		'.tsx': 'TypeScript',
-		'.js': 'JavaScript',
-		'.jsx': 'JavaScript',
-		'.py': 'Python',
-		'.java': 'Java',
-		'.cpp': 'C++',
-		'.c': 'C',
-		'.cs': 'C#',
-		'.go': 'Go',
-		'.rs': 'Rust',
-		'.rb': 'Ruby',
-		'.php': 'PHP',
-		'.swift': 'Swift',
-		'.kt': 'Kotlin',
-		'.html': 'HTML',
-		'.css': 'CSS',
-		'.scss': 'SCSS',
-		'.vue': 'Vue',
-		'.svelte': 'Svelte',
-		'.md': 'Markdown',
-		'.json': 'JSON',
-		'.yaml': 'YAML',
-		'.yml': 'YAML',
-		'.toml': 'TOML',
-		'.sh': 'Shell',
-		'.sql': 'SQL'
-	};
-
-	for (const file of files) {
-		const ext = path.extname(file.path).toLowerCase();
-		const language = extensionToLanguage[ext] || 'Other';
-		
-		if (!breakdown[language]) {
-			breakdown[language] = 0;
-		}
-		breakdown[language] += file.lines;
-	}
-
-	return breakdown;
 }
 
 /**

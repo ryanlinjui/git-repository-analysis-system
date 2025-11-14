@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import type { AnalysisResult } from './types';
+import type { AnalysisResult } from './constants';
 
 let genAI: GoogleGenerativeAI | null = null;
 
