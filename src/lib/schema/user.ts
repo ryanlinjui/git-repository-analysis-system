@@ -3,6 +3,12 @@ import { Timestamp } from './utils';
 
 export const route = (uid: string) => `/dashboard/${uid}`;
 
+// Quota limits
+export const UNLIMITED_QUOTA_FLAG = -1; // -1 means unlimited
+export const USER_QUOTA_LIMIT = UNLIMITED_QUOTA_FLAG; // user scans per day
+export const ANONYMOUS_USER_QUOTA_LIMIT = 5; // anonymous scans per day
+export const ANONYMOUS_QUOTA_RESET_TIME = 24 * 60 * 60 * 1000; // 24 hours
+
 /**
  * User Profile Schema
  * Stores minimal user information (most data comes from Firebase Auth)
@@ -12,10 +18,10 @@ export const UserSchema = z.object({
 	
 	// Simple quota tracking (stored directly in user document)
 	quota: z.object({
-		limit: z.number().default(-1).describe('Daily scan limit. -1 = unlimited'),
+		limit: z.number().default(USER_QUOTA_LIMIT).describe('Daily scan limit. -1 = unlimited'),
 		used: z.number().default(0).describe('Scans used today'),
-		resetAt: Timestamp.describe('Next reset time (daily at midnight)')
-	}).optional().describe('If quota object is undefined, user has unlimited scans'),
+		resetAt: Timestamp.optional().describe('Next reset time (daily at midnight). Null for unlimited quota')
+	}).describe('User quota information'),
 
 	// Timestamps
 	createdAt: Timestamp,
@@ -29,11 +35,13 @@ export const UserSchema = z.object({
  */
 export const AnonymousUserSchema = z.object({
 	hashedIp: z.string().describe('Hashed IP address'),
-	quotaUsed: z.number().default(0).describe('Scans used today'),
-
-	// Auto-cleanup
-	expiresAt: Timestamp.describe('Auto-delete after 24 hours using Firestore TTL'),
 	
+	quota: z.object({
+		limit: z.number().default(ANONYMOUS_USER_QUOTA_LIMIT).describe('Daily scan limit. -1 = unlimited'),
+		used: z.number().default(0).describe('Scans used today'),
+		resetAt: Timestamp.describe('Auto-delete after 24 hours using Firestore TTL')
+	}).describe('Anonymous user quota information'),
+
 	// Timestamps
 	createdAt: Timestamp,
 	updatedAt: Timestamp
