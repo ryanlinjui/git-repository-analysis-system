@@ -22,10 +22,24 @@ service cloud.firestore {
     
     // Scans collection
     match /scans/{scanId} {
-      // Users can only read their own scans
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      // Only server can write (via Admin SDK through API endpoints)
-      allow write: if false;
+      // Allow anyone to read scans (for link sharing - anyone with the link can view)
+      allow read: if true;
+      
+      // Allow delete only by the scan owner (authenticated user)
+      allow delete: if isAuthenticated() 
+                    && resource.data.userId == request.auth.uid;
+      
+      // Allow update only for cancellation by the scan owner (authenticated user)
+      // Status is numeric: 0=QUEUED, 1=RUNNING, 2=SUCCEEDED, 3=FAILED
+      // Ensure the user can only cancel their own scan
+      allow update: if isAuthenticated() 
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 3
+                    && request.resource.data.errorCode == 'CANCELLED'
+                    && request.resource.data.userId == resource.data.userId;
+      
+      // No create from client (only server via Admin SDK)
+      allow create: if false;
     }
     
     // Repository collection (shared analysis results)
@@ -38,8 +52,11 @@ service cloud.firestore {
     
     // Anonymous users collection (for IP-based rate limiting)
     match /anonymous_users/{hashedIp} {
-      // Server-only access for rate limiting
-      allow read, write: if false;
+      // Allow anyone to read their own quota (matched by hashedIp from client)
+      // Client determines hashedIp from their last scan's userId
+      allow read: if true;
+      // Only server can write (via Admin SDK for quota tracking)
+      allow write: if false;
     }
   }
 }
