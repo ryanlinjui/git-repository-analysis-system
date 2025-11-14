@@ -48,9 +48,9 @@
 		>
 			<User class="w-6 h-6 text-purple-600 dark:text-purple-400" />
 		</div>
-		<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Personalized Experience</h3>
+		<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">Better Experience</h3>
 		<p class="text-gray-600 dark:text-gray-400 text-sm">
-			Sign in to enjoy more customization features and cloud sync
+			Sign in to get more quota and synchronous scan
 		</p>
 	</div>
 </div>

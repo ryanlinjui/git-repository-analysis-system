@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { X, Github } from 'lucide-svelte';
+	import { X, Github} from 'lucide-svelte';
 	import { signInWithGithub, firebaseUser } from '$lib/stores/auth';
 
 	interface Props {

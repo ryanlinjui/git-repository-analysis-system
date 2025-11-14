@@ -1,59 +1,41 @@
 <script lang="ts">
-	import { House, History, Search, PanelLeftClose, Clock, CheckCircle2, XCircle, Loader2 } from 'lucide-svelte';
+	import { House, History, PanelLeftClose, Trash2 } from 'lucide-svelte';
+	import { scanHistory, formatDate, getTimestamp } from '$lib/stores/history';
+	import { getStatusInfo } from './ScanStatus.svelte';
+	import { ScanStatus } from '$lib/schema/scan';
+	import { goto, invalidate } from '$app/navigation';
 	import type { Scan } from '$lib/schema/scan';
-	import type { Timestamp } from '$lib/schema/utils';
+	import { deleteScan } from '$lib/scan-client';
 
 	interface Props {
 		open?: boolean;
-		scanHistory?: Scan[];
-		onScanItemClick?: (scan: Scan) => void;
-		onToggle?: () => void;
 	}
 
-	let { open = $bindable(true), scanHistory = [], onScanItemClick, onToggle }: Props = $props();
+	let { open = $bindable(true) }: Props = $props();
 
-	// Helper function to get status icon and color
-	function getStatusInfo(status: Scan['status']) {
-		switch (status) {
-			case 'succeeded':
-				return { icon: CheckCircle2, color: 'text-green-500' };
-			case 'failed':
-				return { icon: XCircle, color: 'text-red-500' };
-			case 'running':
-				return { icon: Loader2, color: 'text-blue-500 animate-spin' };
-			case 'queued':
-				return { icon: Clock, color: 'text-gray-400' };
-			default:
-				return { icon: Search, color: 'text-gray-400' };
-		}
+	async function handleScanItemClick(scan: Scan) {
+		// If already on a scan page, invalidate to force refresh
+		await goto(`/scan/${scan.scanId}`);
+		await invalidate('app:scan');
 	}
 
-	// Format date to relative time or absolute
-	function formatDate(timestamp: Timestamp): string {
-		let date: Date;
-		
-		// Convert Firestore Timestamp to Date if needed
-		if (timestamp instanceof Date) {
-			date = timestamp;
-		} else if (typeof timestamp === 'object' && 'seconds' in timestamp) {
-			// Firestore Timestamp format
-			date = new Date(timestamp.seconds * 1000);
-		} else {
-			// Fallback
-			date = new Date(timestamp as any);
-		}
-		
-		const now = new Date();
-		const diffMs = now.getTime() - date.getTime();
-		const diffMins = Math.floor(diffMs / 60000);
-		const diffHours = Math.floor(diffMs / 3600000);
-		const diffDays = Math.floor(diffMs / 86400000);
+	function toggleSidebar() {
+		open = !open;
+	}
 
-		if (diffMins < 1) return 'Just now';
-		if (diffMins < 60) return `${diffMins} mins ago`;
-		if (diffHours < 24) return `${diffHours} hours ago`;
-		if (diffDays < 7) return `${diffDays} days ago`;
-		return date.toLocaleDateString('en-US');
+	async function handleDeleteScan(event: MouseEvent, scanId: string) {
+		event.stopPropagation(); // Prevent navigation to scan page
+
+		if (!confirm('Are you sure you want to delete this scan?')) {
+			return;
+		}
+
+		const result = await deleteScan(scanId);
+		
+		if (!result.success) {
+			alert(result.error || 'Failed to delete scan');
+		}
+		// scanHistory store will automatically update via Firestore listener
 	}
 </script>
 
@@ -70,7 +52,7 @@
 			>
 		</a>
 		<button
-			onclick={onToggle}
+			onclick={toggleSidebar}
 			class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
 			aria-label="Close sidebar"
 		>
@@ -87,33 +69,108 @@
 				<History class="w-4 h-4" />
 				<span>Scan History</span>
 			</div>
-			<div class="space-y-1">
-				{#if scanHistory.length === 0}
-					<div class="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
-						No scan records found
-					</div>
-				{:else}
-					{#each scanHistory as scan (scan.scanId)}
-						{@const statusInfo = getStatusInfo(scan.status)}
-						{@const StatusIcon = statusInfo.icon}
-						<button
-							onclick={() => onScanItemClick?.(scan)}
-							class="w-full flex items-start gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors"
-						>
-							<StatusIcon class="w-4 h-4 shrink-0 mt-0.5 {statusInfo.color}" />
-							<div class="flex-1 text-left min-w-0">
-								<div class="font-medium truncate">{scan.repoId}</div>
-								<div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-									<span>{formatDate(scan.createdAt)}</span>
-									{#if scan.status === 'running' && scan.progress > 0}
-										<span>• {scan.progress}%</span>
-									{/if}
+			
+			{#if $scanHistory.length === 0}
+				<div class="px-3 py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+					No scan records found
+				</div>
+			{:else}
+				<!-- Active Scans (Running/Queued) - sorted by updatedAt -->
+				{@const activeScans = $scanHistory
+					.filter((s: Scan) => s.status === ScanStatus.RUNNING || s.status === ScanStatus.QUEUED)
+					.sort((a: Scan, b: Scan) => {
+						// Sort by status first (running before queued)
+						if (a.status !== b.status) {
+							return a.status === ScanStatus.RUNNING ? -1 : 1;
+						}
+						// Then by updatedAt descending
+						return getTimestamp(b.updatedAt) - getTimestamp(a.updatedAt);
+					})}
+				{#if activeScans.length > 0}
+					<div class="mb-4">
+						<div class="px-2 mb-2 text-xs font-medium text-blue-600 dark:text-blue-400">
+							Active ({activeScans.length})
+						</div>
+						<div class="space-y-1">
+							{#each activeScans as scan (scan.scanId)}
+								{@const statusInfo = getStatusInfo(scan.status)}
+								{@const StatusIcon = statusInfo.icon}
+								<div
+									class="w-full flex items-start gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors group cursor-pointer"
+									role="button"
+									tabindex="0"
+									onclick={() => handleScanItemClick(scan)}
+									onkeydown={(e) => e.key === 'Enter' && handleScanItemClick(scan)}
+								>
+									<StatusIcon class="w-4 h-4 shrink-0 mt-0.5 {statusInfo.color}" />
+									<div class="flex-1 text-left min-w-0">
+										<div class="font-medium truncate">{scan.repoFullName}</div>
+										<div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+											<span class="{statusInfo.color}">{statusInfo.label}</span>
+											{#if scan.status === ScanStatus.RUNNING && scan.progress > 0}
+												<span>• {scan.progress}%</span>
+											{/if}
+											<span>• {formatDate(scan.createdAt)}</span>
+										</div>
+									</div>
+									<button
+										onclick={(e) => handleDeleteScan(e, scan.scanId)}
+										class="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
+										aria-label="Delete scan"
+									>
+										<Trash2 class="w-4 h-4 text-red-600 dark:text-red-400" />
+									</button>
 								</div>
-							</div>
-						</button>
-					{/each}
+							{/each}
+						</div>
+					</div>
 				{/if}
-			</div>
+				
+				<!-- Completed Scans - sorted by finishedAt/updatedAt -->
+				{@const completedScans = $scanHistory
+					.filter((s: Scan) => s.status === ScanStatus.SUCCEEDED || s.status === ScanStatus.FAILED)
+					.sort((a: Scan, b: Scan) => {
+						const aTime = getTimestamp(a.finishedAt) || getTimestamp(a.updatedAt);
+						const bTime = getTimestamp(b.finishedAt) || getTimestamp(b.updatedAt);
+						return bTime - aTime;
+					})}
+				{#if completedScans.length > 0}
+					<div>
+						<div class="px-2 mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">
+							Recent ({completedScans.length})
+						</div>
+						<div class="space-y-1">
+							{#each completedScans as scan (scan.scanId)}
+								{@const statusInfo = getStatusInfo(scan.status)}
+								{@const StatusIcon = statusInfo.icon}
+								<div
+									class="w-full flex items-start gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors group cursor-pointer"
+									role="button"
+									tabindex="0"
+									onclick={() => handleScanItemClick(scan)}
+									onkeydown={(e) => e.key === 'Enter' && handleScanItemClick(scan)}
+								>
+									<StatusIcon class="w-4 h-4 shrink-0 mt-0.5 {statusInfo.color}" />
+									<div class="flex-1 text-left min-w-0">
+										<div class="font-medium truncate">{scan.repoFullName}</div>
+										<div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+											<span class="{statusInfo.color}">{statusInfo.label}</span>
+											<span>• {formatDate(scan.finishedAt || scan.updatedAt)}</span>
+										</div>
+									</div>
+									<button
+										onclick={(e) => handleDeleteScan(e, scan.scanId)}
+										class="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
+										aria-label="Delete scan"
+									>
+										<Trash2 class="w-4 h-4 text-red-600 dark:text-red-400" />
+									</button>
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			{/if}
 		</div>
 	</div>
 </aside>
