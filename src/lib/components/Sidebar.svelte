@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { House, History, PanelLeftClose, Trash2 } from 'lucide-svelte';
-	import { scanHistory, formatDate, getTimestamp } from '$lib/stores/history';
+	import { formatRelativeTime, getTimestamp } from '$lib/utils/date';
+	import { scanHistory } from '$lib/stores/history';
 	import { getStatusInfo } from './ScanStatus.svelte';
 	import { ScanStatus } from '$lib/schema/scan';
 	import { goto, invalidate } from '$app/navigation';
@@ -95,27 +96,27 @@
 							{#each activeScans as scan (scan.scanId)}
 								{@const statusInfo = getStatusInfo(scan.status)}
 								{@const StatusIcon = statusInfo.icon}
+								{@const tooltipText = `${scan.repoFullName}\nStatus: ${statusInfo.label}\nProgress: ${scan.progress}%\nCreated: ${formatRelativeTime(scan.createdAt)}`}
 								<div
-									class="w-full flex items-start gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors group cursor-pointer"
+									class="w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors group cursor-pointer"
 									role="button"
 									tabindex="0"
+									title={tooltipText}
 									onclick={() => handleScanItemClick(scan)}
 									onkeydown={(e) => e.key === 'Enter' && handleScanItemClick(scan)}
 								>
-									<StatusIcon class="w-4 h-4 shrink-0 mt-0.5 {statusInfo.color}" />
-									<div class="flex-1 text-left min-w-0">
+									<StatusIcon class="w-4 h-4 shrink-0 {statusInfo.color}" />
+									<div class="flex-1 min-w-0">
 										<div class="font-medium truncate">{scan.repoFullName}</div>
-										<div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-											<span class="{statusInfo.color}">{statusInfo.label}</span>
-											{#if scan.status === ScanStatus.RUNNING && scan.progress > 0}
-												<span>• {scan.progress}%</span>
-											{/if}
-											<span>• {formatDate(scan.createdAt)}</span>
+										<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+											<span class="{statusInfo.color}">{scan.progress}%</span>
+											<span>•</span>
+											<span class="truncate">{formatRelativeTime(scan.createdAt)}</span>
 										</div>
 									</div>
 									<button
 										onclick={(e) => handleDeleteScan(e, scan.scanId)}
-										class="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
+										class="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all shrink-0"
 										aria-label="Delete scan"
 									>
 										<Trash2 class="w-4 h-4 text-red-600 dark:text-red-400" />
@@ -143,24 +144,27 @@
 							{#each completedScans as scan (scan.scanId)}
 								{@const statusInfo = getStatusInfo(scan.status)}
 								{@const StatusIcon = statusInfo.icon}
+								{@const tooltipText = `${scan.repoFullName}\nStatus: ${statusInfo.label}\nCompleted: ${formatRelativeTime(scan.finishedAt || scan.updatedAt)}`}
 								<div
-									class="w-full flex items-start gap-3 px-3 py-2.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors group cursor-pointer"
+									class="w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors group cursor-pointer"
 									role="button"
 									tabindex="0"
+									title={tooltipText}
 									onclick={() => handleScanItemClick(scan)}
 									onkeydown={(e) => e.key === 'Enter' && handleScanItemClick(scan)}
 								>
-									<StatusIcon class="w-4 h-4 shrink-0 mt-0.5 {statusInfo.color}" />
-									<div class="flex-1 text-left min-w-0">
+									<StatusIcon class="w-4 h-4 shrink-0 {statusInfo.color}" />
+									<div class="flex-1 min-w-0">
 										<div class="font-medium truncate">{scan.repoFullName}</div>
-										<div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+										<div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
 											<span class="{statusInfo.color}">{statusInfo.label}</span>
-											<span>• {formatDate(scan.finishedAt || scan.updatedAt)}</span>
+											<span>•</span>
+											<span class="truncate">{formatRelativeTime(scan.finishedAt || scan.updatedAt)}</span>
 										</div>
 									</div>
 									<button
 										onclick={(e) => handleDeleteScan(e, scan.scanId)}
-										class="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
+										class="opacity-0 group-hover:opacity-100 p-1.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all shrink-0"
 										aria-label="Delete scan"
 									>
 										<Trash2 class="w-4 h-4 text-red-600 dark:text-red-400" />

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Repository } from '$lib/schema/repository';
 	import { Code2, GitFork, Star, Calendar, Award, CheckCircle, XCircle, FileText, Package, Share2 } from 'lucide-svelte';
+	import { formatRelativeTime } from '$lib/utils/date';
 
 	interface Props {
 		repository: Repository;
@@ -27,13 +28,6 @@
 			console.error('Failed to copy URL:', error);
 			alert('Failed to copy URL. Please try again.');
 		}
-	}
-
-	// Helper: Format date
-	function formatDate(date: any): string {
-		if (!date) return 'Unknown';
-		const d = date instanceof Date ? date : new Date(date.seconds * 1000);
-		return d.toLocaleDateString();
 	}
 
 	// Skill level colors
@@ -128,7 +122,7 @@
 			{/if}
 			<div class="flex items-center gap-1">
 				<Calendar class="w-4 h-4" />
-				<span>Analyzed {formatDate(repository.lastScannedAt)}</span>
+				<span>Analyzed {formatRelativeTime(repository.lastScannedAt)}</span>
 			</div>
 		</div>
 	</div>
@@ -165,11 +159,6 @@
 							{/if}
 						</div>
 					</div>
-					{#if tech.confidence}
-						<div class="text-xs text-gray-400 dark:text-gray-500">
-							{tech.confidence}%
-						</div>
-					{/if}
 				</div>
 			{/each}
 		</div>
@@ -306,10 +295,12 @@
 			</div>
 
 			{#if repository.fileStats.languageBreakdown}
+				{@const sortedLanguages = Object.entries(repository.fileStats.languageBreakdown).sort(([, a], [, b]) => b - a).slice(0, 10)}
+				{@const maxLines = sortedLanguages.length > 0 ? sortedLanguages[0][1] : 1}
 				<div>
 					<h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Language Breakdown</h3>
 					<div class="space-y-2">
-						{#each Object.entries(repository.fileStats.languageBreakdown).sort(([, a], [, b]) => b - a).slice(0, 10) as [lang, lines]}
+						{#each sortedLanguages as [lang, lines]}
 							<div>
 								<div class="flex items-center justify-between text-sm mb-1">
 									<span class="text-gray-700 dark:text-gray-300">{lang}</span>
@@ -318,7 +309,7 @@
 								<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
 									<div
 										class="bg-blue-600 dark:bg-blue-500 h-2 rounded-full"
-										style="width: {(lines / (repository.fileStats?.totalLines || 1)) * 100}%"
+										style="width: {(lines / maxLines) * 100}%"
 									></div>
 								</div>
 							</div>

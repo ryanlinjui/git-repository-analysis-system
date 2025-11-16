@@ -43,7 +43,7 @@
 	};
 
 	/**
-	 * Get status info helper
+	 * Get status info
 	 */
 	export function getStatusInfo(status: ScanStatusValue) {
 		return SCAN_STATUS_CONFIG[status] || SCAN_STATUS_CONFIG[ScanStatus.QUEUED];
