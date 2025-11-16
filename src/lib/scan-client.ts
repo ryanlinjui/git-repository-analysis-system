@@ -1,7 +1,8 @@
+import { now } from '$lib/utils/date';
 import { db } from '$lib/firebase';
 import { doc, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth } from '$lib/firebase';
-import { ScanStatus } from '$lib/schema/scan';
+import { ScanStatus, ScanErrorCode} from '$lib/schema/scan';
 
 export interface ScanCreationResult {
 	success: boolean;
@@ -21,7 +22,7 @@ export interface CancelResult {
 }
 
 /**
- * Delete a scan (Client-side only)
+ * Delete a scan
  * Only allows deletion of own scans (authenticated users only)
  */
 export async function deleteScan(scanId: string): Promise<DeleteResult> {
@@ -72,17 +73,16 @@ export async function deleteScan(scanId: string): Promise<DeleteResult> {
 }
 
 /**
- * Cancel a running scan (Client-side only)
+ * Cancel a running scan
  * Marks the scan as failed with CANCELLED error code
  */
 export async function cancelScan(scanId: string): Promise<CancelResult> {
 	try {
 		await updateDoc(doc(db, 'scans', scanId), {
 			status: ScanStatus.FAILED,
-			errorCode: 'CANCELLED',
-			errorMessage: 'Scan cancelled by user',
-			finishedAt: new Date(),
-			updatedAt: new Date()
+			errorCode: ScanErrorCode.CANCELLED,
+			finishedAt: now(),
+			updatedAt: now()
 		});
 
 		return {
@@ -93,13 +93,13 @@ export async function cancelScan(scanId: string): Promise<CancelResult> {
 		console.error('Cancel scan error:', error);
 		return {
 			success: false,
-			error: error instanceof Error ? error.message : 'Failed to cancel scan'
+			error: 'Failed to cancel scan'
 		};
 	}
 }
 
 /**
- * Submit a scan request via API (Client-side only)
+ * Submit a scan request via API
  */
 export async function submitScanRequest(repoUrl: string): Promise<ScanCreationResult> {
 	try {
@@ -120,11 +120,6 @@ export async function submitScanRequest(repoUrl: string): Promise<ScanCreationRe
 				repoId: '',
 				error: data.error || 'Failed to create scan'
 			};
-		}
-
-		// Store scanId in localStorage for anonymous quota tracking
-		if (data.scanId) {
-			localStorage.setItem('lastScanId', data.scanId);
 		}
 
 		return {
