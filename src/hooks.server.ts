@@ -42,6 +42,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		!event.url.pathname.startsWith('/api/auth/signin') &&
 		!event.url.pathname.startsWith('/api/auth/signout') &&
 		!event.url.pathname.startsWith('/api/scan') && // Allow anonymous scans
+		!event.url.pathname.startsWith('/api/anonymous') && // Allow anonymous UID generation
 		!event.locals.user
 	) {
 		return new Response(JSON.stringify({ error: 'Unauthorized' }), {
