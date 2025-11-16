@@ -1,3 +1,4 @@
+import { env } from '$env/dynamic/private';
 import type { Repository, TechStackItem, FileStats, StructureAnalysis, CodeQuality, Complexity, SkillLevel } from '$lib/schema/repository';
 
 /**
@@ -6,6 +7,7 @@ import type { Repository, TechStackItem, FileStats, StructureAnalysis, CodeQuali
 
 // AI model configuration
 export const AI_MODEL = 'gemini-2.0-flash';
+export const GOOGLE_GENAI_API_KEY = env.GOOGLE_GENAI_API_KEY || '';
 
 /**
  * Git Repository Analysis Configuration
@@ -39,24 +41,6 @@ export const IGNORE_PATTERNS = [
 	/\.bundle\.js$/, // Bundled files
 	/\.map$/, // Source maps
 ];
-
-/**
- * Git Hosting Providers URL Patterns
- */
-export const GIT_PROVIDER_PATTERNS = {
-	github: [
-		/github\.com\/([^\/]+)\/([^\/\.]+)(\.git)?$/,
-		/github\.com\/([^\/]+)\/([^\/]+)/
-	],
-	gitlab: [
-		/gitlab\.com\/([^\/]+)\/([^\/\.]+)(\.git)?$/,
-		/gitlab\.com\/([^\/]+)\/([^\/]+)/
-	],
-	bitbucket: [
-		/bitbucket\.org\/([^\/]+)\/([^\/\.]+)(\.git)?$/,
-		/bitbucket\.org\/([^\/]+)\/([^\/]+)/
-	]
-};
 
 /**
  * API Endpoints for Git Providers
@@ -123,6 +107,5 @@ export interface RepoSnapshot {
 	};
 	files: FileInfo[];
 	readme?: string;
-	packageJson?: any;
 	// Structure analysis removed - AI will determine everything
 }

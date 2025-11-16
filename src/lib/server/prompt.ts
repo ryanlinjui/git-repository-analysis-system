@@ -5,7 +5,7 @@ import type { RepoSnapshot } from './constants';
  * AI analyzes everything in one go - more accurate and efficient
  */
 export function generateComprehensiveAnalysisPrompt(snapshot: RepoSnapshot): string {
-	const { metadata, files, readme, packageJson } = snapshot;
+	const { metadata, files, readme} = snapshot;
 
 	// Get file structure overview
 	const fileList = files
@@ -131,7 +131,6 @@ Analyze this repository **thoroughly** and provide a comprehensive JSON response
    - Identify technologies **actually used** in the code
    - Don't just list everything in package.json - check if it's actually imported
    - Determine versions from config files
-   - Rate confidence based on actual usage evidence
 
 3. **Analyze File Statistics**:
    - Count files by **actual language used**, not just extensions
@@ -172,8 +171,7 @@ Return **ONLY** this JSON object (no markdown, no extra text):
     {
       "name": "Technology name (e.g., React, TypeScript, PostgreSQL)",
       "category": "language|framework|library|tool|platform|database|other",
-      "version": "version string or null",
-      "confidence": 0-100 (based on actual usage evidence in code)
+      "version": "version string or null"
     }
   ],
   

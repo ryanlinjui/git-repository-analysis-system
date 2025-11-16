@@ -1,3 +1,4 @@
+import { now } from '$lib/utils/date';
 import type { Repository } from '$lib/schema/repository';
 import { AI_MODEL } from './constants';
 
@@ -66,7 +67,7 @@ export async function generateDummyRepository(
 	// Simulate realistic progress
 	await simulateProgress(onProgress);
 	
-	const now = new Date();
+	const timestamp = now();
 	
 	return {
 		repoId: 'dummy123456789abc',
@@ -81,7 +82,7 @@ export async function generateDummyRepository(
 			commitSha: 'abc123def456789012345678901234567890abcd',
 			stars: 1234,
 			forks: 567,
-			lastUpdated: now
+			lastUpdated: now()
 		},
 		
 		description: 'A modern full-stack web application built with SvelteKit and TypeScript. This project demonstrates best practices in web development, including server-side rendering, API routes, authentication, and responsive design. It features a clean architecture with separation of concerns, comprehensive testing, and CI/CD pipeline integration.',
@@ -90,68 +91,57 @@ export async function generateDummyRepository(
 			{
 				name: 'TypeScript',
 				category: 'language',
-				version: '5.9.3',
-				confidence: 100
+				version: '5.9.3'
 			},
 			{
 				name: 'SvelteKit',
 				category: 'framework',
-				version: '2.47.1',
-				confidence: 98
+				version: '2.47.1'
 			},
 			{
 				name: 'Svelte',
 				category: 'framework',
-				version: '5.41.0',
-				confidence: 98
+				version: '5.41.0'
 			},
 			{
 				name: 'Vite',
 				category: 'tool',
-				version: '7.1.10',
-				confidence: 95
+				version: '7.1.10'
 			},
 			{
 				name: 'Tailwind CSS',
 				category: 'framework',
-				version: '4.1.14',
-				confidence: 92
+				version: '4.1.14'
 			},
 			{
 				name: 'Firebase',
 				category: 'platform',
-				version: '12.5.0',
-				confidence: 88
+				version: '12.5.0'
 			},
 			{
 				name: 'Zod',
 				category: 'library',
-				version: '4.1.12',
-				confidence: 90
+				version: '4.1.12'
 			},
 			{
 				name: 'Vitest',
 				category: 'tool',
-				version: '2.1.8',
-				confidence: 85
+				version: '2.1.8'
 			},
 			{
 				name: 'Playwright',
 				category: 'tool',
-				version: '1.49.0',
-				confidence: 80
+				version: '1.49.0'
 			},
 			{
 				name: 'ESLint',
 				category: 'tool',
-				version: '9.15.0',
-				confidence: 95
+				version: '9.15.0'
 			},
 			{
 				name: 'Prettier',
 				category: 'tool',
-				version: '3.4.2',
-				confidence: 90
+				version: '3.4.2'
 			}
 		],
 		
@@ -224,9 +214,9 @@ export async function generateDummyRepository(
 		aiModel: AI_MODEL,
 		analyzedCommit: 'abc123def456789012345678901234567890abcd',
 		totalScans: 1,
-		lastScannedAt: now,
-		createdAt: now,
-		updatedAt: now
+		lastScannedAt: now(),
+		createdAt: now(),
+		updatedAt: now()
 	};
 }
 
@@ -234,7 +224,7 @@ export async function generateDummyRepository(
  * Alternative dummy data - Beginner level project
  */
 export function generateBeginnerDummyRepo(): Repository {
-	const now = new Date();
+	const timestamp = now();
 	
 	return {
 		repoId: 'dummy-beginner-001',
@@ -249,15 +239,15 @@ export function generateBeginnerDummyRepo(): Repository {
 			commitSha: 'abc123',
 			stars: 5,
 			forks: 2,
-			lastUpdated: now
+			lastUpdated: now()
 		},
 		
 		description: 'A simple HTML and CSS website showcasing basic web development skills. This project includes a homepage, about page, and contact form with clean, semantic markup and responsive design.',
 		
 		techStack: [
-			{ name: 'HTML', category: 'language', version: '5', confidence: 100 },
-			{ name: 'CSS', category: 'language', version: '3', confidence: 100 },
-			{ name: 'JavaScript', category: 'language', version: 'ES6', confidence: 60 }
+			{ name: 'HTML', category: 'language', version: '5'},
+			{ name: 'CSS', category: 'language', version: '3'},
+			{ name: 'JavaScript', category: 'language', version: 'ES6'}
 		],
 		
 		primaryLanguage: 'HTML',
@@ -312,9 +302,9 @@ export function generateBeginnerDummyRepo(): Repository {
 		aiModel: AI_MODEL,
 		analyzedCommit: 'abc123',
 		totalScans: 1,
-		lastScannedAt: now,
-		createdAt: now,
-		updatedAt: now
+		lastScannedAt: now(),
+		createdAt: now(),
+		updatedAt: now()
 	};
 }
 
@@ -322,7 +312,7 @@ export function generateBeginnerDummyRepo(): Repository {
  * Alternative dummy data - Senior level project
  */
 export function generateSeniorDummyRepo(): Repository {
-	const now = new Date();
+	const timestamp = now();
 	
 	return {
 		repoId: 'dummy-senior-001',
@@ -337,21 +327,21 @@ export function generateSeniorDummyRepo(): Repository {
 			commitSha: 'xyz789',
 			stars: 5420,
 			forks: 1230,
-			lastUpdated: now
+			lastUpdated: now()
 		},
 		
 		description: 'A high-performance distributed system for real-time data processing built with Kubernetes, Go microservices, and Apache Kafka. Features event-driven architecture, automatic scaling, fault tolerance, distributed tracing, and comprehensive monitoring. Handles millions of events per second with sub-100ms latency.',
 		
 		techStack: [
-			{ name: 'Go', category: 'language', version: '1.22', confidence: 100 },
-			{ name: 'Kubernetes', category: 'platform', version: '1.29', confidence: 98 },
-			{ name: 'Apache Kafka', category: 'platform', version: '3.7', confidence: 95 },
-			{ name: 'PostgreSQL', category: 'database', version: '16', confidence: 92 },
-			{ name: 'Redis', category: 'database', version: '7.2', confidence: 90 },
-			{ name: 'Prometheus', category: 'tool', version: '2.50', confidence: 88 },
-			{ name: 'Grafana', category: 'tool', version: '10.3', confidence: 85 },
-			{ name: 'gRPC', category: 'framework', version: '1.62', confidence: 95 },
-			{ name: 'Docker', category: 'tool', version: '25.0', confidence: 98 }
+			{ name: 'Go', category: 'language', version: '1.22'},
+			{ name: 'Kubernetes', category: 'platform', version: '1.29'},
+			{ name: 'Apache Kafka', category: 'platform', version: '3.7'},
+			{ name: 'PostgreSQL', category: 'database', version: '16'},
+			{ name: 'Redis', category: 'database', version: '7.2'},
+			{ name: 'Prometheus', category: 'tool', version: '2.50'},
+			{ name: 'Grafana', category: 'tool', version: '10.3'},
+			{ name: 'gRPC', category: 'framework', version: '1.62'},
+			{ name: 'Docker', category: 'tool', version: '25.0' }
 		],
 		
 		primaryLanguage: 'Go',
@@ -421,8 +411,8 @@ export function generateSeniorDummyRepo(): Repository {
 		aiModel: AI_MODEL,
 		analyzedCommit: 'xyz789',
 		totalScans: 3,
-		lastScannedAt: now,
-		createdAt: now,
-		updatedAt: now
+		lastScannedAt: now(),
+		createdAt: now(),
+		updatedAt: now()
 	};
 }

@@ -5,7 +5,6 @@ import path from 'path';
 import type { Repository } from '$lib/schema/repository';
 import type { FileInfo, RepoSnapshot } from './constants';
 import { 
-	GIT_PROVIDER_PATTERNS, 
 	GIT_PROVIDER_API, 
 	IGNORE_PATTERNS
 } from './constants';
@@ -13,90 +12,40 @@ import {
 const execAsync = promisify(exec);
 
 /**
- * Parse Git repository URL to get provider, owner and repo name
- * Supports GitHub, GitLab, Bitbucket, and any Git server
- * Includes security validation to prevent SSRF attacks
+ * Clone repository and extract owner/name from git remote
+ * Returns repo info directly without parsing URL strings
  */
-export function parseGitUrl(url: string): { 
-	provider: 'github' | 'gitlab' | 'bitbucket' | 'other'; 
-	owner: string; 
+export async function cloneRepository(repoUrl: string, targetDir: string): Promise<{
+	owner: string;
 	name: string;
-	host?: string; // For self-hosted instances
-} | null {
-	// Security: Validate URL format
-	if (!url || typeof url !== 'string') {
-		return null;
-	}
-
-	// Security: Prevent localhost and private IP addresses (SSRF protection)
-	const BLOCKED_HOSTS = [
-		/localhost/i,
-		/127\.0\.0\./,
-		/192\.168\./,
-		/10\.\d+\.\d+\.\d+/,
-		/172\.(1[6-9]|2[0-9]|3[0-1])\./,
-		/0\.0\.0\.0/,
-		/::1/,
-		/file:\/\//i
-	];
-
-	if (BLOCKED_HOSTS.some(pattern => pattern.test(url))) {
-		console.warn('Blocked potentially dangerous URL:', url);
-		return null;
-	}
-
-	// Security: Must use HTTPS or SSH
-	if (!url.startsWith('https://') && !url.startsWith('git@')) {
-		console.warn('URL must use HTTPS or SSH protocol');
-		return null;
-	}
-
-	// Security: Check URL length (prevent DoS)
-	if (url.length > 500) {
-		console.warn('URL too long');
-		return null;
-	}
-
-	// Try known providers first
-	for (const [provider, patterns] of Object.entries(GIT_PROVIDER_PATTERNS)) {
-		for (const pattern of patterns) {
-			const match = url.match(pattern);
-			if (match) {
-				return {
-					provider: provider as 'github' | 'gitlab' | 'bitbucket',
-					owner: match[1],
-					name: match[2].replace('.git', '')
-				};
-			}
-		}
-	}
-
-	// Fallback: Try to parse any Git URL (including self-hosted)
-	// Pattern: http(s)://domain/owner/repo or git@domain:owner/repo
-	const httpPattern = /https?:\/\/([^\/]+)\/([^\/]+)\/([^\/\.]+)(\.git)?$/;
-	const sshPattern = /git@([^:]+):([^\/]+)\/([^\/\.]+)(\.git)?$/;
-	
-	let match = url.match(httpPattern) || url.match(sshPattern);
-	if (match) {
-		return {
-			provider: 'other',
-			host: match[1],
-			owner: match[2],
-			name: match[3].replace('.git', '')
-		};
-	}
-
-	return null;
-}
-
-/**
- * Clone repository to temporary directory
- */
-export async function cloneRepository(repoUrl: string, targetDir: string): Promise<void> {
+}> {
+	// Clone the repository
 	try {
 		await execAsync(`git clone --depth 1 "${repoUrl}" "${targetDir}"`);
 	} catch (error) {
 		throw new Error(`Failed to clone repository: ${error instanceof Error ? error.message : 'Unknown error'}`);
+	}
+
+	// Read owner/name from git config after clone
+	try {
+		const { stdout } = await execAsync('git config --get remote.origin.url', { cwd: targetDir });
+		const remoteUrl = stdout.trim();
+		
+		// Extract owner/name using regex (supports HTTPS and SSH formats)
+		// HTTPS: https://github.com/owner/repo.git
+		// SSH: git@github.com:owner/repo.git
+		const match = remoteUrl.match(/[:/]([^/]+)\/([^/]+?)(\.git)?$/);
+		
+		if (!match) {
+			throw new Error(`Failed to extract owner/name from git remote URL: ${remoteUrl}`);
+		}
+		
+		return {
+			owner: match[1],
+			name: match[2]
+		};
+	} catch (error) {
+		throw new Error(`Failed to get repository info from git: ${error instanceof Error ? error.message : 'Unknown error'}`);
 	}
 }
 
@@ -189,17 +138,31 @@ async function fetchGitMetadata(
 }
 
 /**
+ * Determine Git provider from URL
+ * Simple pattern matching without full URL parsing
+ */
+function detectProvider(url: string): 'github' | 'gitlab' | 'bitbucket' | 'other' {
+	const lowerUrl = url.toLowerCase();
+	
+	if (lowerUrl.includes('github.com')) return 'github';
+	if (lowerUrl.includes('gitlab.com')) return 'gitlab';
+	if (lowerUrl.includes('bitbucket.org')) return 'bitbucket';
+	
+	return 'other';
+}
+
+/**
  * Get repository metadata
+ * Uses git remote data instead of parsing URL strings
  */
 export async function getRepoMetadata(
 	repoUrl: string, 
-	repoDir: string
-): Promise<Repository['metadata'] & { owner: string; name: string }> {
-	const parsed = parseGitUrl(repoUrl);
-	
-	if (!parsed) {
-		throw new Error('Invalid or unsupported Git repository URL. Supported platforms: GitHub, GitLab, Bitbucket');
-	}
+	repoDir: string,
+	owner: string,
+	name: string
+): Promise<Repository['metadata']> {
+	// Determine provider from URL for API calls
+	const provider = detectProvider(repoUrl);
 
 	// Get current commit SHA
 	let commitSha: string | null = null;
@@ -220,15 +183,15 @@ export async function getRepoMetadata(
 	}
 
 	// Fetch metadata from Git provider API
-	console.log(`🔍 Fetching metadata from ${parsed.provider.toUpperCase()} API for ${parsed.owner}/${parsed.name}...`);
-	const gitData = await fetchGitMetadata(parsed.provider, parsed.owner, parsed.name);
+	console.log(`🔍 Fetching metadata from ${provider.toUpperCase()} API for ${owner}/${name}...`);
+	const gitData = await fetchGitMetadata(provider, owner, name);
 
 	return {
 		url: repoUrl,
-		owner: parsed.owner,
-		name: parsed.name,
-		fullName: `${parsed.owner}/${parsed.name}`,
-		provider: parsed.provider,
+		owner,
+		name,
+		fullName: `${owner}/${name}`,
+		provider,
 		branch,
 		commitSha,
 		stars: gitData?.stars || null,

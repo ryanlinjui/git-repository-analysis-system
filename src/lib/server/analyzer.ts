@@ -1,10 +1,9 @@
-import fs from 'fs/promises';
-import path from 'path';
 import crypto from 'crypto';
+import { now } from '$lib/utils/date';
 import type { Repository } from '$lib/schema/repository';
+import { analyzeWithGemini } from './llm';
 import type { RepoSnapshot } from './constants';
 import { TEMP_DIR_PREFIX, AI_MODEL } from './constants';
-import { analyzeWithGemini } from './llm';
 import { generateComprehensiveAnalysisPrompt } from './prompt';
 import {
 	cloneRepository,
@@ -26,8 +25,13 @@ export function generateRepoId(url: string): string {
  * Create repository snapshot for AI analysis
  * Now much simpler - just collect files, let AI do all the analysis
  */
-async function createRepoSnapshot(repoUrl: string, repoDir: string): Promise<RepoSnapshot> {
-	const metadata = await getRepoMetadata(repoUrl, repoDir);
+async function createRepoSnapshot(
+	repoUrl: string, 
+	repoDir: string,
+	owner: string,
+	name: string
+): Promise<RepoSnapshot> {
+	const metadata = await getRepoMetadata(repoUrl, repoDir, owner, name);
 	const allFiles = await getAllFiles(repoDir);
 
 	// Get README (support multiple formats)
@@ -43,22 +47,10 @@ async function createRepoSnapshot(repoUrl: string, repoDir: string): Promise<Rep
 		readme = readmeFile.content;
 	}
 
-	// Get package.json if exists
-	let packageJson: any;
-	const packageJsonFile = allFiles.find(f => f.path === 'package.json');
-	if (packageJsonFile) {
-		try {
-			packageJson = JSON.parse(packageJsonFile.content);
-		} catch (error) {
-			console.warn('Failed to parse package.json:', error);
-		}
-	}
-
 	return {
 		metadata,
 		files: allFiles,
-		readme,
-		packageJson
+		readme
 	};
 }
 
@@ -99,12 +91,12 @@ export async function analyzeRepository(
 		// Step 1: Clone repository
 		onProgress?.(10, '📦 Cloning repository...');
 		console.log('📦 Cloning repository from:', repoUrl);
-		await cloneRepository(repoUrl, tmpDir);
+		const { owner, name } = await cloneRepository(repoUrl, tmpDir);
 		onProgress?.(25, '✅ Repository cloned');
 
 		// Step 2: Fetch metadata
 		onProgress?.(30, '🔍 Fetching repository metadata...');
-		const metadata = await getRepoMetadata(repoUrl, tmpDir);
+		const metadata = await getRepoMetadata(repoUrl, tmpDir, owner, name);
 		console.log(`✨ Repository: ${metadata.fullName}`);
 		if (metadata.stars !== null && metadata.stars !== undefined) {
 			console.log(`   ├─ ⭐ Stars: ${metadata.stars.toLocaleString()}`);
@@ -118,13 +110,11 @@ export async function analyzeRepository(
 		// Step 3: Collect files
 		onProgress?.(40, '📊 Collecting repository files...');
 		console.log('📊 Collecting files for AI analysis...');
-		const snapshot = await createRepoSnapshot(repoUrl, tmpDir);
+		const snapshot = await createRepoSnapshot(repoUrl, tmpDir, owner, name);
 		console.log(`   └─ Total files: ${snapshot.files.length}`);
 		onProgress?.(50, `✅ Collected ${snapshot.files.length} files`);
 
 		// === SINGLE AI ANALYSIS - Let AI do EVERYTHING ===
-		const now = new Date();
-		
 		onProgress?.(55, '🤖 AI analyzing repository comprehensively...');
 		console.log('🤖 Comprehensive AI Analysis');
 		console.log('   ├─ Sending repository to AI...');
@@ -178,9 +168,9 @@ export async function analyzeRepository(
 			aiModel: AI_MODEL,
 			analyzedCommit: snapshot.metadata.commitSha,
 			totalScans: 1,
-			lastScannedAt: now,
-			createdAt: now,
-			updatedAt: now
+			lastScannedAt: now(),
+			createdAt: now(),
+			updatedAt: now()
 		};
 
 		onProgress?.(100, '✅ Complete! AI-driven analysis finished');

@@ -1,12 +1,8 @@
 import { adminDb } from '$lib/server/firebase';
+import { ScanStatus, ScanErrorCode } from '$lib/schema/scan';
+import { now } from '$lib/utils/date';
 import { analyzeRepository, generateRepoId } from '$lib/server/analyzer';
-import { parseGitUrl } from '$lib/server/git-utils';
-import { ScanStatus } from '$lib/schema/scan';
-
-interface User {
-	uid: string;
-	email?: string;
-}
+import { GOOGLE_GENAI_API_KEY } from './constants';
 
 export interface ScanCreationResult {
 	success: boolean;
@@ -20,40 +16,29 @@ export interface ScanCreationResult {
  */
 export async function handleScanSubmission(
 	repoUrl: string,
-	user: User | null,
-	hashedIp: string
+	uid: string
 ): Promise<ScanCreationResult> {
 	try {
-		const parsed = parseGitUrl(repoUrl);
-		if (!parsed) {
-			return {
-				success: false,
-				scanId: '',
-				repoId: '',
-				error: 'Invalid GitHub repository URL'
-			};
-		}
-
-		const userId = user?.uid || `anonymous-${hashedIp}`;
+		const userId = uid;
 		const repoId = generateRepoId(repoUrl);
-		const repoFullName = `${parsed.owner}/${parsed.name}`;
 
 		const scansRef = adminDb.collection('scans');
 		const scanRef = scansRef.doc();
 		const scanId = scanRef.id;
 		
-		const now = new Date();
+		const timestamp = now();
+		const tempRepoFullName = repoUrl.replace(/^https?:\/\//, '').replace(/\.git$/, '').split('/').slice(-2).join('/');
+
 		await scanRef.set({
 			scanId,
 			userId,
 			repoId,
-			repoFullName,
-			isPublic: true,
+			repoFullName: tempRepoFullName, // Temporary, will be updated after cloning
 			status: ScanStatus.QUEUED,
 			progress: 0,
-			queuedAt: now,
-			createdAt: now,
-			updatedAt: now
+			queuedAt: timestamp,
+			createdAt: timestamp,
+			updatedAt: timestamp
 		});
 
 		return { success: true, scanId, repoId };
@@ -63,7 +48,7 @@ export async function handleScanSubmission(
 			success: false,
 			scanId: '',
 			repoId: '',
-			error: err instanceof Error ? err.message : 'Unknown error'
+			error: ScanErrorCode.SCAN_SUBMISSION_FAILED
 		};
 	}
 }
@@ -73,17 +58,19 @@ export async function handleScanSubmission(
  */
 export async function runBackgroundAnalysis(
 	scanId: string,
-	repoUrl: string,
-	geminiApiKey: string
+	repoUrl: string
 ): Promise<void> {
 	const scanRef = adminDb.collection('scans').doc(scanId);
 	const repoId = generateRepoId(repoUrl);
 	
-	// Helper: Check if scan was cancelled
+	// Check if scan was cancelled
 	const isCancelled = async (): Promise<boolean> => {
 		const scanDoc = await scanRef.get();
+		if (!scanDoc.exists) {
+			return false;
+		}
 		const data = scanDoc.data();
-		return data?.status === ScanStatus.FAILED && data?.errorCode === 'CANCELLED';
+		return data?.status === ScanStatus.FAILED && data?.errorCode === ScanErrorCode.CANCELLED;
 	};
 	
 	try {
@@ -96,30 +83,28 @@ export async function runBackgroundAnalysis(
 		// Update to running
 		await scanRef.update({
 			status: ScanStatus.RUNNING,
-			startedAt: new Date(),
+			startedAt: now(),
 			progress: 0,
-			updatedAt: new Date()
+			updatedAt: now()
 		});
 
 		// Run analysis with cancellation checks
 		let cancelRequested = false;
 		
 		try {
-			const result = await analyzeRepository(repoUrl, geminiApiKey, async (progress: number) => {
+			const result = await analyzeRepository(repoUrl, GOOGLE_GENAI_API_KEY, async (progress: number) => {
 				// Check if cancelled during analysis
 				if (await isCancelled()) {
 					if (!cancelRequested) {
 						console.log('Scan cancelled at progress:', progress);
 						cancelRequested = true;
 					}
-					// Don't throw error - just skip updating progress
-					// This allows the analysis to complete gracefully
 					return;
 				}
 				
 				await scanRef.update({
 					progress,
-					updatedAt: new Date()
+					updatedAt: now()
 				});
 			});
 
@@ -137,15 +122,15 @@ export async function runBackgroundAnalysis(
 
 			// Save repository data
 			const repoRef = adminDb.collection('repository').doc(repoId);
-			const { repoId: _, ...dataWithoutId } = result;
-			await repoRef.set({ repoId, ...dataWithoutId });
+			await repoRef.set(result);
 
-			// Mark scan as succeeded
+			// Mark scan as succeeded and update repoFullName
 			await scanRef.update({
+				repoFullName: result.metadata.fullName,
 				status: ScanStatus.SUCCEEDED,
 				progress: 100,
-				finishedAt: new Date(),
-				updatedAt: new Date()
+				finishedAt: now(),
+				updatedAt: now()
 			});
 		} catch (analysisError) {
 			// If analysis itself fails (not cancellation)
@@ -166,12 +151,23 @@ export async function runBackgroundAnalysis(
 		// Don't overwrite cancellation status
 		const cancelled = await isCancelled();
 		if (!cancelled) {
+			// Determine error code based on error type
+			let errorCode: typeof ScanErrorCode[keyof typeof ScanErrorCode] = ScanErrorCode.UNKNOWN;
+			
+			if (err instanceof Error) {
+				const errorMsg = err.message.toLowerCase();
+				if (errorMsg.includes('clone')) {
+					errorCode = ScanErrorCode.CLONE_FAILED;
+				} else if (errorMsg.includes('analys')) {
+					errorCode = ScanErrorCode.ANALYSIS_FAILED;
+				}
+			}
+			
 			await scanRef.update({
 				status: ScanStatus.FAILED,
-				errorCode: 'ANALYSIS_ERROR',
-				errorMessage: err instanceof Error ? err.message : 'Unknown error',
-				finishedAt: new Date(),
-				updatedAt: new Date()
+				errorCode,
+				finishedAt: now(),
+				updatedAt: now()
 			});
 		} else {
 			console.log('Error occurred during cancelled scan, keeping CANCELLED status');
