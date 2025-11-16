@@ -11,10 +11,10 @@ export const RepositoryMetadataSchema = z.object({
 	fullName: z.string().describe('Full repository name, e.g., "facebook/react"'),
 	provider: z.enum(['github', 'gitlab', 'bitbucket', 'other']).describe('Git hosting provider'),
 	branch: z.string().default('main').describe('Branch name'),
-	commitSha: z.string().nullable().optional().describe('Latest commit SHA analyzed'),
-	stars: z.number().nullable().optional().describe('Star count'),
-	forks: z.number().nullable().optional().describe('Fork count'),
-	lastUpdated: Timestamp.nullable().optional().describe('Last updated timestamp from provider')
+	commitSha: z.string().nullable().describe('Latest commit SHA analyzed'),
+	stars: z.number().nullable().describe('Star count'),
+	forks: z.number().nullable().describe('Fork count'),
+	lastUpdated: Timestamp.nullable().describe('Last updated timestamp from provider')
 });
 
 export type RepositoryMetadata = z.infer<typeof RepositoryMetadataSchema>;
@@ -33,8 +33,7 @@ export const TechStackItemSchema = z.object({
 		'database',
 		'other'
 	]).describe('Technology category'),
-	version: z.string().nullable().optional().describe('Version if detected'),
-	confidence: z.number().min(0).max(100).optional().describe('Detection confidence percentage')
+	version: z.string().nullable().describe('Version if detected')
 });
 
 export type TechStackItem = z.infer<typeof TechStackItemSchema>;
@@ -44,8 +43,8 @@ export type TechStackItem = z.infer<typeof TechStackItemSchema>;
  */
 export const FileStatsSchema = z.object({
 	totalFiles: z.number().describe('Total number of files'),
-	totalLines: z.number().optional().describe('Total lines of code'),
-	languageBreakdown: z.record(z.string(), z.number()).optional().describe('Lines of code per language, e.g., { "TypeScript": 1500, "Python": 500 }'),
+	totalLines: z.number().describe('Total lines of code'),
+	languageBreakdown: z.record(z.string(), z.number()).describe('Lines of code per language, e.g., { "TypeScript": 1500, "Python": 500 }'),
 });
 
 export type FileStats = z.infer<typeof FileStatsSchema>;
@@ -70,9 +69,9 @@ export type StructureAnalysis = z.infer<typeof StructureAnalysisSchema>;
  * Code quality assessment schema
  */
 export const CodeQualitySchema = z.object({
-	score: z.number().min(0).max(100).optional().describe('Overall code quality score'),
-	issues: z.array(z.string()).optional().describe('Identified issues'),
-	strengths: z.array(z.string()).optional().describe('Project strengths')
+	score: z.number().min(0).max(100).describe('Overall code quality score'),
+	issues: z.array(z.string()).describe('Identified issues'),
+	strengths: z.array(z.string()).describe('Project strengths')
 });
 
 export type CodeQuality = z.infer<typeof CodeQualitySchema>;
@@ -81,8 +80,8 @@ export type CodeQuality = z.infer<typeof CodeQualitySchema>;
  * Complexity analysis schema
  */
 export const ComplexitySchema = z.object({
-	score: z.number().min(0).max(100).optional().describe('Overall complexity score'),
-	factors: z.array(z.string()).optional().describe('Complexity factors')
+	score: z.number().min(0).max(100).describe('Overall complexity score'),
+	factors: z.array(z.string()).describe('Complexity factors')
 });
 
 export type Complexity = z.infer<typeof ComplexitySchema>;
@@ -116,30 +115,30 @@ export const RepositorySchema = z.object({
 	// Technology stack
 	techStack: z.array(TechStackItemSchema).describe('Detected technologies'),
 	
-	primaryLanguage: z.string().nullable().optional().describe('Primary programming language'),
+	primaryLanguage: z.string().nullable().describe('Primary programming language'),
 	
 	// Skill level assessment
 	skillLevel: SkillLevelSchema.describe('Assessed skill level required'),
 	
-	skillLevelRationale: z.string().max(1000).optional().describe('Rationale for skill level assessment'),
+	skillLevelRationale: z.string().max(1000).describe('Rationale for skill level assessment'),
 	
 	// Detailed analysis - File statistics
-	fileStats: FileStatsSchema.optional().describe('File and code statistics'),
+	fileStats: FileStatsSchema.describe('File and code statistics'),
 	
 	// Detailed analysis - Structure
-	structureAnalysis: StructureAnalysisSchema.optional().describe('Project structure analysis'),
+	structureAnalysis: StructureAnalysisSchema.describe('Project structure analysis'),
 	
 	// Additional insights - Code quality
-	codeQuality: CodeQualitySchema.optional().describe('Code quality assessment'),
+	codeQuality: CodeQualitySchema.describe('Code quality assessment'),
 	
 	// Additional insights - Complexity
-	complexity: ComplexitySchema.optional().describe('Complexity analysis'),
+	complexity: ComplexitySchema.describe('Complexity analysis'),
 	
 	// AI metadata
-	aiModel: z.string().nullable().optional().describe('AI model used, e.g., "gpt-4", "claude-3"'),
+	aiModel: z.string().describe('AI model used, e.g., "gpt-4", "claude-3"'),
 	
 	// Cache metadata
-	analyzedCommit: z.string().nullable().optional().describe('Commit SHA that was analyzed'),
+	analyzedCommit: z.string().nullable().describe('Commit SHA that was analyzed'),
 	totalScans: z.number().default(1).describe('Number of times this repo has been scanned'),
 	lastScannedAt: Timestamp.describe('Last time this repo was scanned'),
 	

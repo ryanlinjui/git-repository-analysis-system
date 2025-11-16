@@ -10,18 +10,22 @@ export const ANONYMOUS_USER_QUOTA_LIMIT = 5; // anonymous scans per day
 export const ANONYMOUS_QUOTA_RESET_TIME = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
+ * Quota Schema
+ * Represents user quota information
+ */
+export const QuotaSchema = z.object({
+	used: z.number().describe('Scans used today'),
+	limit: z.number().describe('Daily scan limit. -1 = unlimited'),
+	resetAt: Timestamp.nullable().describe('Next reset time (daily at midnight). Null for unlimited quota. Auto-delete after 24 hours using Firestore TTL if anonymous user.'),
+});
+
+/**
  * User Profile Schema
  * Stores minimal user information (most data comes from Firebase Auth)
  */
 export const UserSchema = z.object({
 	uid: z.string().describe('User ID from Firebase Auth'),
-	
-	// Simple quota tracking (stored directly in user document)
-	quota: z.object({
-		limit: z.number().default(USER_QUOTA_LIMIT).describe('Daily scan limit. -1 = unlimited'),
-		used: z.number().default(0).describe('Scans used today'),
-		resetAt: Timestamp.optional().describe('Next reset time (daily at midnight). Null for unlimited quota')
-	}).describe('User quota information'),
+	quota: QuotaSchema.describe('User quota information'),
 
 	// Timestamps
 	createdAt: Timestamp,
@@ -34,13 +38,8 @@ export const UserSchema = z.object({
  * Auto-deleted after 24 hours
  */
 export const AnonymousUserSchema = z.object({
-	hashedIp: z.string().describe('Hashed IP address'),
-	
-	quota: z.object({
-		limit: z.number().default(ANONYMOUS_USER_QUOTA_LIMIT).describe('Daily scan limit. -1 = unlimited'),
-		used: z.number().default(0).describe('Scans used today'),
-		resetAt: Timestamp.describe('Auto-delete after 24 hours using Firestore TTL')
-	}).describe('Anonymous user quota information'),
+	uid: z.string().describe('Hashed IP address as user ID'),
+	quota: QuotaSchema.describe('Anonymous user quota information'),
 
 	// Timestamps
 	createdAt: Timestamp,
@@ -50,3 +49,4 @@ export const AnonymousUserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>;
 export type AnonymousUser = z.infer<typeof AnonymousUserSchema>;
+export type Quota = z.infer<typeof QuotaSchema>;

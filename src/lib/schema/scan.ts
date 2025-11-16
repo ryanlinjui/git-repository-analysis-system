@@ -14,6 +14,17 @@ export const ScanStatus = {
 export type ScanStatusValue = (typeof ScanStatus)[keyof typeof ScanStatus];
 
 /**
+ * Scan error codes (stored as string in database)
+ */
+export const ScanErrorCode = {
+	CLONE_FAILED: 'CLONE_FAILED',
+	SCAN_SUBMISSION_FAILED: 'SCAN_SUBMISSION_FAILED',
+	ANALYSIS_FAILED: 'ANALYSIS_FAILED',
+	CANCELLED: 'CANCELLED',
+	UNKNOWN: 'UNKNOWN'
+} as const;
+
+/**
  * Scan Schema
  * Main scan record tracking the analysis process
  */
@@ -24,9 +35,6 @@ export const ScanSchema = z.object({
 	// Repository information
 	repoId: z.string().describe('Unique repository identifier (hash of normalized URL)'),
 	repoFullName: z.string().describe('Full repository name, e.g., "owner/repo-name"'),
-	
-	// Sharing
-	isPublic: z.boolean().default(false).describe('Whether this scan can be shared publicly'),
 
     // Status tracking (stored as number)
 	status: z.union([
@@ -41,24 +49,16 @@ export const ScanSchema = z.object({
 
 	// Timestamps
 	queuedAt: Timestamp,
-	startedAt: Timestamp.nullable().optional(),
-	finishedAt: Timestamp.nullable().optional(),
+	startedAt: Timestamp.nullable(),
+	finishedAt: Timestamp.nullable(),
 	
-	// Error handling
-	errorCode: z.enum([
-        'INVALID_URL',           // Malformed repository URL
-        'REPO_NOT_FOUND',        // Repository doesn't exist
-        'REPO_PRIVATE',          // Repository is private/inaccessible
-        'CLONE_FAILED',          // Failed to clone repository
-        'TIMEOUT',               // Scan exceeded time limit
-        'REPO_TOO_LARGE',        // Repository exceeds size limit
-        'ANALYSIS_FAILED',       // Analysis process failed
-        'RATE_LIMIT_EXCEEDED',   // User exceeded rate limit
-        'CANCELLED',             // Scan cancelled by user
-        'UNKNOWN'                // Unknown error
-    ]).nullable().optional(),
-	errorMessage: z.string().nullable().optional(),
-	retryCount: z.number().default(0).optional(),
+	// Error handling (stored as string: 'CLONE_FAILED', 'ANALYSIS_FAILED', 'CANCELLED', 'UNKNOWN')
+	errorCode: z.union([
+		z.literal(ScanErrorCode.CLONE_FAILED),
+		z.literal(ScanErrorCode.ANALYSIS_FAILED),
+		z.literal(ScanErrorCode.CANCELLED),
+		z.literal(ScanErrorCode.UNKNOWN)
+	]).nullable(),
 	
 	createdAt: Timestamp,
 	updatedAt: Timestamp
