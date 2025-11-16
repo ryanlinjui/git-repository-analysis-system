@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { cancelScan } from '$lib/scan-client';
-	import { Loader2, CheckCircle2, XCircle, X, AlertCircle } from 'lucide-svelte';
+	import { Loader2, CheckCircle2, XCircle, X, AlertCircle, Home } from 'lucide-svelte';
 	import type { Scan } from '$lib/schema/scan';
 	import { ScanStatus } from '$lib/schema/scan';
 
@@ -32,7 +32,7 @@
 			return '📋 Compiling results...';
 		}
 		if (scan.status === ScanStatus.SUCCEEDED) return '✅ Analysis complete!';
-		if (scan.status === ScanStatus.FAILED) return `❌ ${scan.errorMessage || 'Analysis failed'}`;
+		else if (scan.status === ScanStatus.FAILED) return `❌ Analysis failed`;
 		return 'Processing...';
 	});
 
@@ -56,16 +56,6 @@
 	<div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
 		<!-- Header -->
 		<div class="relative bg-linear-to-r from-blue-600 to-indigo-600 p-8 text-white">
-			{#if isActive}
-				<button
-					onclick={handleCancel}
-					class="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-lg transition-colors"
-					aria-label="Cancel scan"
-				>
-					<X class="w-5 h-5" />
-				</button>
-			{/if}
-
 			<div class="flex items-center gap-4">
 				{#if isActive}
 					<Loader2 class="w-12 h-12 animate-spin" />
@@ -88,7 +78,7 @@
 						{/if}
 					</h2>
 					<p class="text-blue-100 text-sm mt-1">
-						Scan ID: <code class="font-mono bg-white/20 px-2 py-0.5 rounded">{scan.scanId.slice(0, 12)}...</code>
+						Scan ID: <code class="font-mono bg-white/20 px-2 py-0.5 rounded">{scan.scanId}</code>
 					</p>
 				</div>
 			</div>
@@ -125,17 +115,14 @@
 			</div>
 
 			<!-- Error Details -->
-			{#if isFailed && scan.errorMessage}
+			{#if isFailed && scan.errorCode}
 				<div class="mb-8">
 					<div class="bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-xl p-6">
 						<div class="flex items-start gap-3">
 							<AlertCircle class="w-6 h-6 text-red-600 dark:text-red-400 shrink-0 mt-1" />
 							<div class="flex-1">
 								<h3 class="text-lg font-semibold text-red-800 dark:text-red-300 mb-2">Error Details</h3>
-								<p class="text-red-700 dark:text-red-400 mb-1">{scan.errorMessage}</p>
-								{#if scan.errorCode}
-									<p class="text-sm text-red-600 dark:text-red-500 font-mono">Error Code: {scan.errorCode}</p>
-								{/if}
+								<p class="text-red-700 dark:text-red-400 mb-1">{scan.errorCode}</p>
 							</div>
 						</div>
 					</div>

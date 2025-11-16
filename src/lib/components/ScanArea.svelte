@@ -1,30 +1,32 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { Search, AlertCircle, Loader2 } from 'lucide-svelte';
-	import { user, quota } from '$lib/stores/auth';
+	import { quota, isLoggedIn } from '$lib/stores/auth';
+	import { anonymousUid, anonymousQuota, get_last_anonymous_scan } from '$lib/stores/anonymous';
 	import { submitScanRequest } from '$lib/scan-client';
+	import { UNLIMITED_QUOTA_FLAG } from '$lib/schema/user';
 
 	let repoUrl = $state('');
 	let isSubmitting = $state(false);
 	let errorMessage = $state('');
 
-	// Restore last scan ID for anonymous users
+	// Restore last scan ID for anonymous users only
 	let lastScanId = $state<string | null>(null);
 	
 	$effect(() => {
-		if (typeof window !== 'undefined') {
-			const stored = localStorage.getItem('lastScanId');
-			if (stored) {
-				lastScanId = stored;
-			}
+		// Only load last scan for anonymous users (not logged in)
+		if (!$isLoggedIn && $anonymousUid) {
+			get_last_anonymous_scan($anonymousUid).then(scanId => {
+				lastScanId = scanId;
+			});
+		} else {
+			lastScanId = null;
 		}
 	});
 
 	function goToLastScan() {
-		const scanId = localStorage.getItem('lastScanId');
-		
-		if (scanId) {
-			goto(`/scan/${scanId}`);
+		if (lastScanId) {
+			goto(`/scan/${lastScanId}`);
 		}
 	}
 
@@ -36,8 +38,10 @@
 			return;
 		}
 
-		// Check quota before submitting
-		if (!$quota.hasQuota) {
+		// Check quota: use auth quota if logged in, otherwise anonymous quota
+		const currentQuota = $isLoggedIn ? $quota : $anonymousQuota;
+		const hasQuota = !currentQuota || currentQuota.limit === UNLIMITED_QUOTA_FLAG || currentQuota.used < currentQuota.limit;
+		if (!hasQuota) {
 			errorMessage = 'Daily quota exceeded. Please try again tomorrow or sign in for more scans.';
 			return;
 		}
@@ -51,11 +55,6 @@
 
 			if (!result.success) {
 				throw new Error(result.error || 'Failed to start analysis');
-			}
-
-			// Store scan ID for anonymous users
-			if (!$user && typeof window !== 'undefined') {
-				localStorage.setItem('lastScanId', result.scanId);
 			}
 
 			// Navigate to scan page
@@ -120,7 +119,7 @@
 	</button>
 
 	<!-- Anonymous User: Return to Last Scan -->
-	{#if !$user && lastScanId}
+	{#if !$isLoggedIn && lastScanId}
 		<div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
 			<button
 				type="button"
