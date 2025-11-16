@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { env } from '$env/dynamic/private';
 
 /**
  * User identifier - either authenticated UID or hashed IP for anonymous
@@ -30,7 +31,7 @@ export function getClientIp(request: Request): string {
  * Hash IP address for anonymous user identification
  */
 export function hashIp(ip: string): string {
-	const salt = process.env.IP_HASH_SALT || 'default-salt-change-in-production';
+	const salt = env.IP_HASH_SALT || 'default-salt-change-in-production';
 	return createHash('sha256').update(ip + salt).digest('hex');
 }
 

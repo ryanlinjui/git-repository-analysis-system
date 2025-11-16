@@ -43,6 +43,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		!event.url.pathname.startsWith('/api/auth/signout') &&
 		!event.url.pathname.startsWith('/api/scan') && // Allow anonymous scans
 		!event.url.pathname.startsWith('/api/anonymous') && // Allow anonymous UID generation
+		!event.url.pathname.startsWith('/api/health') && // Allow health checks (public endpoint)
 		!event.locals.user
 	) {
 		return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -61,21 +62,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 	response.headers.set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-	
-	// Add CORS headers for API routes
-	if (event.url.pathname.startsWith('/api')) {
-		// In production, replace * with your actual domain
-		const origin = event.request.headers.get('origin');
-		const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:4173'];
-		
-		if (origin && (allowedOrigins.includes(origin) || allowedOrigins.includes('*'))) {
-			response.headers.set('Access-Control-Allow-Origin', origin);
-		}
-		
-		response.headers.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-		response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-		response.headers.set('Access-Control-Allow-Credentials', 'true');
-	}
 
 	return response;
 };
