@@ -8,6 +8,7 @@
 	import RepoSummary from '$lib/components/RepoSummary.svelte';
 	import ScanProgress from '$lib/components/ScanProgress.svelte';
 	import { activeScan, loading, error, watchScan, unwatchScan } from '$lib/stores/scan-status';
+	import { toDate } from '$lib/utils/date';
 
 	let { data }: { data: PageData } = $props();
 
@@ -17,11 +18,6 @@
 
 	// Derived
 	const showRepository = $derived($activeScan?.status === ScanStatus.SUCCEEDED && repository !== null);
-
-	// Helper: Convert Firestore Timestamp to Date
-	function toDate(timestamp: any): Date | null {
-		return timestamp?.toDate?.() ?? timestamp ?? null;
-	}
 
 	// Watch scanId and repository
 	$effect(() => {
