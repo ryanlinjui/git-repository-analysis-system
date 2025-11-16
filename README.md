@@ -2,6 +2,8 @@
 
 <div align="center">
 
+<img width="50%" alt="logo" src="https://github.com/user-attachments/assets/a9b058ad-80ca-4889-9d98-099ffaecf727" />
+
 ![Git Repository Analysis System](https://img.shields.io/badge/AI-Powered-blue?style=for-the-badge)
 ![SvelteKit](https://img.shields.io/badge/SvelteKit-FF3E00?style=for-the-badge&logo=svelte&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
@@ -11,12 +13,6 @@
 **AI-powered repository analysis tool that provides comprehensive insights into your codebase**
 
 </div>
-
----
-
-## 🎬 Demo
-
----
 
 ## ✨ Features
 
@@ -88,91 +84,103 @@
 flowchart TB
     subgraph Internet["Internet"]
         Users[Users/Clients]
+        GitHubActions[GitHub Actions Runner]
     end
     
-    subgraph Cloudflare["Cloudflare"]
+    subgraph Cloudflare["Cloudflare Edge Network"]
         CDN[CDN/WAF/DDoS Protection]
+        TunnelEdge[Cloudflare Tunnel Edge]
     end
     
-    subgraph CICD["CI/CD - GitHub Actions"]
+    subgraph CICD["CI/CD Pipeline"]
         direction LR
-        Build[Build Pipeline]
-        
-        subgraph AnsibleRunner["Ansible Container"]
-            Ansible[Deployment Automation<br/>Container Orchestration<br/>Config Management<br/>Zero-Downtime Deploy]
-        end
-        
-        Registry[Container Registry<br/>GHCR]
+        Build[Build & Test]
+        Registry[GitHub Container<br/>Registry GHCR]
     end
     
-    subgraph DockerHost["Production Server"]
+    subgraph DockerHost["Production Server - Docker Compose"]
+        
+        subgraph TunnelContainer["Cloudflared Container"]
+            Tunnel[Cloudflare Tunnel<br/>┌─────────────┐<br/>│ SSH :22     │<br/>│ HTTP :3000  │<br/>└─────────────┘]
+        end
         
         subgraph AppContainer["App Container"]
             App[SvelteKit Application<br/>UI Components<br/>API Routes<br/>Repository Scanner<br/>AI Analyzer]
         end
         
-        subgraph TunnelContainer["Cloudflared"]
-            Tunnel[Cloudflare Tunnel<br/>Secure Ingress]
+        subgraph LogContainer["Loki Container"]
+            Loki[Log Aggregation<br/>7-day Retention]
         end
         
-        subgraph LogContainer["Loki"]
-            Loki[Log Aggregation]
+        subgraph MonitorContainer["Grafana Container"]
+            Grafana[Monitoring Dashboard<br/>Visualization]
         end
         
-        subgraph MonitorContainer["Grafana"]
-            Grafana[Monitoring Dashboard]
+        subgraph CollectorContainer["Promtail Container"]
+            Promtail[Log Collector<br/>Docker Logs]
         end
         
-        subgraph CollectorContainer["Promtail"]
-            Promtail[Log Collector]
-        end
+        SSH[SSH Server :22<br/>host.docker.internal]
         
-        Network[Docker Network]
+        Network[Docker Bridge Network<br/>git-analysis-network]
     end
     
     subgraph DataLayer["Data Layer"]
-        Firestore[(Firebase Firestore<br/>User Data & Scans)]
-        TempFS[Temp Storage<br/>Git Repos]
+        Firestore[("Firebase Firestore<br/>User Data & Scans")]
+        TempFS["Temp Storage<br/>/tmp/git-analysis"]
     end
     
     subgraph ExternalServices["External Services"]
-        GitProviders[Git Providers<br/>GitHub/GitLab/Bitbucket]
-        GeminiAI[Google Gemini AI]
+        GitProviders["Git Providers<br/>GitHub/GitLab/Bitbucket"]
+        GeminiAI["Google Gemini 2.0 Flash<br/>AI Code Analysis"]
     end
     
-    %% User Flow
-    Users -->|request| CDN
-    CDN -->|response| Users
-    CDN -->|request| Tunnel
-    Tunnel -->|response| CDN
-    Tunnel -->|request| App
+    %% User Flow - HTTP Traffic
+    Users -->|HTTPS request| CDN
+    CDN -->|WebSocket| TunnelEdge
+    TunnelEdge -->|encrypted tunnel| Tunnel
+    Tunnel -->|HTTP to app:3000| App
     App -->|response| Tunnel
+    Tunnel -->|encrypted tunnel| TunnelEdge
+    TunnelEdge -->|response| CDN
+    CDN -->|HTTPS response| Users
     
-    %% CI/CD Flow
-    Build -->|push images| Registry
-    Ansible -.->|SSH deploy| DockerHost
-    Registry -.->|pull images| DockerHost
+    %% CI/CD & Deployment Flow
+    Build -->|docker push| Registry
+    GitHubActions -->|install cloudflared| GitHubActions
+    GitHubActions -->|SSH via Cloudflare| TunnelEdge
+    TunnelEdge -->|encrypted tunnel| Tunnel
+    Tunnel -->|SSH to host:22| SSH
+    SSH -->|ansible-playbook| DockerHost
+    Registry -->|docker pull| DockerHost
     
-    %% Firestore - separate directions
-    App -->|write/update| Firestore
-    Firestore -->|subscribe| App
+    %% Database Flow
+    App -->|write scans/users| Firestore
+    Firestore -->|real-time sync| App
     
     %% Temp Storage
-    App -->|write| TempFS
+    App -->|clone & scan| TempFS
+    TempFS -->|read files| App
     
-    %% Git Providers - separate directions
-    App -->|API request| GitProviders
-    GitProviders -->|metadata| App
+    %% External API Flows
+    App -->|fetch repo metadata| GitProviders
+    GitProviders -->|JSON response| App
+    App -->|analysis prompt| GeminiAI
+    GeminiAI -->|AI insights| App
     
-    %% Gemini AI - separate directions
-    App -->|prompt| GeminiAI
-    GeminiAI -->|analysis| App
+    %% Monitoring & Logging Flow
+    AppContainer -.->|stdout/stderr| Promtail
+    TunnelContainer -.->|logs| Promtail
+    Promtail -->|push logs| Loki
+    Grafana -->|LogQL query| Loki
+    Loki -->|log data| Grafana
     
-    %% Logging Flow
-    AppContainer -->|logs| Promtail
-    Promtail -->|push| Loki
-    Grafana -->|query| Loki
-    Loki -->|data| Grafana
+    %% Docker Network
+    App -.->|DNS: app| Network
+    Tunnel -.->|DNS: cloudflared| Network
+    Loki -.->|DNS: loki| Network
+    Grafana -.->|DNS: grafana| Network
+    Promtail -.->|DNS: promtail| Network
     
     %% Network
     AppContainer -.-> Network
@@ -196,76 +204,122 @@ flowchart TB
 
 ```bash
 git-repository-analysis-system/
-├── src/
-│   ├── routes/                      # SvelteKit routes & pages
-│   │   ├── +page.svelte            # Home page with scan submission
-│   │   ├── +layout.svelte          # Root layout with navigation
-│   │   ├── api/                    # API endpoints
-│   │   │   ├── scan/+server.ts     # Scan submission endpoint
-│   │   │   ├── auth/               # Authentication endpoints
-│   │   │   └── anonymous/+server.ts # Anonymous user tracking
-│   │   ├── scan/[id]/              # Scan progress & results page
-│   │   └── dashboard/[id]/         # User dashboard page
-│   │
-│   ├── lib/
-│   │   ├── components/             # Reusable Svelte components
-│   │   │   ├── Auth.svelte         # Authentication UI
-│   │   │   ├── ScanArea.svelte     # URL input & submission
-│   │   │   ├── ScanProgress.svelte # Real-time progress display
-│   │   │   ├── RepoSummary.svelte  # Analysis results display
-│   │   │   └── RateLimits.svelte   # Quota display
-│   │   │
-│   │   ├── server/                 # Server-side logic
-│   │   │   ├── analyzer.ts         # Core analysis orchestration
-│   │   │   ├── git-utils.ts        # Git clone & metadata extraction
-│   │   │   ├── llm.ts              # Gemini AI integration
-│   │   │   ├── prompt.ts           # AI prompt generation
-│   │   │   ├── scan.ts             # Scan creation & background jobs
-│   │   │   ├── firebase.ts         # Firebase Admin SDK setup
-│   │   │   └── validate/           # Validation logic
-│   │   │       ├── url.ts          # URL validation & parsing
-│   │   │       ├── quota.ts        # Rate limiting & quotas
-│   │   │       └── user.ts         # User validation
-│   │   │
-│   │   ├── stores/                 # Svelte stores (state management)
-│   │   │   ├── auth.ts             # Auth state & user data
-│   │   │   ├── scan-status.ts      # Real-time scan tracking
-│   │   │   └── history.ts          # Scan history
-│   │   │
-│   │   ├── schema/                 # Zod schemas & TypeScript types
-│   │   │   ├── repository.ts       # Repository & analysis types
-│   │   │   ├── scan.ts             # Scan status & error types
-│   │   │   └── user.ts             # User & quota types
-│   │   │
-│   │   ├── firebase/               # Firebase client SDK
-│   │   │   └── index.ts            # Firestore & Auth initialization
-│   │   │
-│   │   └── scan-client.ts          # Client-side scan operations
-│   │
-│   ├── hooks.server.ts             # SvelteKit server hooks (auth)
-│   ├── app.html                    # HTML template
-│   └── app.css                     # Global styles
+├── .github/
+│   └── workflows/
+│       └── deploy.yml              # CI/CD pipeline for automated deployment
+│
+├── ansible/                        # Deployment automation
+│   ├── deploy.yml                  # Main deployment playbook
+│   ├── inventory.yml               # Server inventory
+│   └── templates/
+│       └── docker-compose.yml.j2   # Docker Compose template with variables
+│
+├── config/                         # Monitoring & logging configuration
+│   ├── grafana-datasources.yml    # Grafana data source configuration
+│   ├── loki-config.yml            # Loki log aggregation settings
+│   └── promtail-config.yml        # Promtail log collection settings
 │
 ├── firebase/
-│   ├── firestore.rules             # Firestore security rules
-│   └── firestore.indexes.json      # Firestore indexes
+│   ├── firestore.indexes.json     # Firestore indexes
+│   └── firestore.rules            # Firestore security rules
 │
 ├── scripts/
-│   └── scan-repo.ts                # CLI tool for testing scans
+│   └── scan-repo.ts               # CLI tool for testing scans
 │
-├── static/                          # Static assets (favicon, etc.)
+├── src/
+│   ├── lib/
+│   │   ├── components/            # Reusable Svelte components
+│   │   │   ├── Auth.svelte        # Authentication UI
+│   │   │   ├── Avatar.svelte      # User avatar display
+│   │   │   ├── RateLimits.svelte  # Quota display
+│   │   │   ├── RepoSummary.svelte # Analysis results display
+│   │   │   ├── ScanArea.svelte    # URL input & submission
+│   │   │   ├── ScanProgress.svelte # Real-time progress display
+│   │   │   ├── ScanStatus.svelte  # Scan status indicator
+│   │   │   ├── Sidebar.svelte     # Navigation sidebar
+│   │   │   └── Welcome.svelte     # Welcome message
+│   │   │
+│   │   ├── firebase/              # Firebase client SDK
+│   │   │   └── index.ts           # Firestore & Auth initialization
+│   │   │
+│   │   ├── schema/                # Zod schemas & TypeScript types
+│   │   │   ├── repository.ts      # Repository & analysis types
+│   │   │   ├── scan.ts            # Scan status & error types
+│   │   │   ├── user.ts            # User & quota types
+│   │   │   └── utils.ts           # Schema utilities
+│   │   │
+│   │   ├── server/                # Server-side logic
+│   │   │   ├── validate/          # Validation logic
+│   │   │   │   ├── quota.ts       # Rate limiting & quotas
+│   │   │   │   ├── url.ts         # URL validation & parsing
+│   │   │   │   └── user.ts        # User validation
+│   │   │   ├── analyzer.ts        # Core analysis orchestration
+│   │   │   ├── constants.ts       # Server constants
+│   │   │   ├── dummy.ts           # Dummy data for testing
+│   │   │   ├── firebase.ts        # Firebase Admin SDK setup
+│   │   │   ├── git-utils.ts       # Git clone & metadata extraction
+│   │   │   ├── llm.ts             # Gemini AI integration
+│   │   │   ├── prompt.ts          # AI prompt generation
+│   │   │   ├── scan.ts            # Scan creation & background jobs
+│   │   │   └── scanInit.ts        # Scan initialization
+│   │   │
+│   │   ├── stores/                # Svelte stores (state management)
+│   │   │   ├── anonymous.ts       # Anonymous user tracking
+│   │   │   ├── auth.ts            # Auth state & user data
+│   │   │   ├── history.ts         # Scan history
+│   │   │   └── scan-status.ts     # Real-time scan tracking
+│   │   │
+│   │   ├── utils/
+│   │   │   └── date.ts            # Date formatting utilities
+│   │   │
+│   │   └── scan-client.ts         # Client-side scan operations
+│   │
+│   ├── routes/                    # SvelteKit routes & pages
+│   │   ├── api/                   # API endpoints
+│   │   │   ├── anonymous/
+│   │   │   │   └── +server.ts     # Anonymous user tracking
+│   │   │   ├── auth/              # Authentication endpoints
+│   │   │   │   ├── signin/
+│   │   │   │   │   └── +server.ts # Sign in endpoint
+│   │   │   │   └── signout/
+│   │   │   │       └── +server.ts # Sign out endpoint
+│   │   │   └── scan/
+│   │   │       └── +server.ts     # Scan submission endpoint
+│   │   │
+│   │   ├── dashboard/[id]/
+│   │   │   ├── +page.server.ts    # Dashboard server load
+│   │   │   └── +page.svelte       # User dashboard page
+│   │   │
+│   │   ├── scan/[id]/
+│   │   │   ├── +page.server.ts    # Scan server load
+│   │   │   └── +page.svelte       # Scan progress & results page
+│   │   │
+│   │   ├── +layout.svelte         # Root layout with navigation
+│   │   └── +page.svelte           # Home page with scan submission
+│   │
+│   ├── app.css                    # Global styles
+│   ├── app.d.ts                   # TypeScript declarations
+│   ├── app.html                   # HTML template
+│   └── hooks.server.ts            # SvelteKit server hooks (auth)
 │
-├── package.json                     # Dependencies & scripts
-├── pnpm-lock.yaml                  # Lock file
-├── svelte.config.js                # SvelteKit configuration
-├── vite.config.ts                  # Vite build configuration
-├── tsconfig.json                   # TypeScript configuration
-├── tailwind.config.js              # Tailwind CSS configuration
-├── service-account-file.json       # Firebase Admin credentials (gitignored)
-└── README.md                       # This file
+├── static/                        # Static assets (empty)
+│
+├── .env                           # Environment variables (gitignored)
+├── .env.example                   # Environment variables template
+├── .gitignore                     # Git ignore rules
+├── .npmrc                         # npm configuration
+├── compose.yml                    # Docker Compose configuration
+├── Dockerfile                     # Application container image
+├── LICENSE                        # MIT License
+├── package.json                   # Dependencies & scripts
+├── pnpm-lock.yaml                # Lock file
+├── README.md                      # This file
+├── service-account-file.example.json # Firebase Admin credentials example
+├── service-account-file.json     # Firebase Admin credentials (gitignored)
+├── svelte.config.js              # SvelteKit configuration
+├── tsconfig.json                 # TypeScript configuration
+└── vite.config.ts                # Vite build configuration
 ```
-
----
 
 ## 📥 Setup Instructions
 
@@ -313,6 +367,25 @@ https://github.com/dummy/test-repo
 ---
 
 ## 🚀 Deployment Guide
+
+### Quick Deploy
+
+```bash
+docker compose up -d
+```
+
+### Redeploy
+```bash
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
+
+### Check status
+```bash
+docker compose ps
+docker compose logs -f
+```
 
 ---
 
