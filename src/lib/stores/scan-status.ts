@@ -2,6 +2,7 @@ import { writable } from 'svelte/store';
 import { db } from '$lib/firebase';
 import { doc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import type { Scan } from '$lib/schema/scan';
+import { toDate } from '$lib/utils/date';
 
 // Active scan state
 const activeScan = writable<Scan | null>(null);
@@ -10,13 +11,6 @@ const error = writable<string | null>(null);
 
 // Current listener
 let scanUnsubscribe: Unsubscribe | null = null;
-
-/**
- * Helper: Convert Firestore Timestamp to Date
- */
-function toDate(timestamp: any): Date | null {
-	return timestamp?.toDate?.() ?? timestamp ?? null;
-}
 
 /**
  * Start listening to a scan by ID
