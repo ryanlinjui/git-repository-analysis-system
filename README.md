@@ -1,4 +1,4 @@
-# 🔍 Git Repository Analysis System
+# GitRepoScanner
 
 <div align="center">
 
@@ -10,7 +10,7 @@
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
 ![Google Gemini](https://img.shields.io/badge/Google_Gemini-8E75B2?style=for-the-badge&logo=google&logoColor=white)
 
-**AI-powered repository analysis tool that provides comprehensive insights into your codebase**
+***"AI-powered repository analysis tool that provides comprehensive insights into your codebase"***
 
 </div>
 
