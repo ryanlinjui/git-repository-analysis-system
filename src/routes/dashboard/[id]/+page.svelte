@@ -2,18 +2,12 @@
 	import { goto } from '$app/navigation';
 	import { User as UserIcon, ArrowUpDown, Trash2 } from 'lucide-svelte';
 	import { user } from '$lib/stores/auth';
-	import { scanHistory, formatDate, getTimestamp } from '$lib/stores/history';
+	import { formatRelativeTime, getTimestamp } from '$lib/utils/date';
+	import { scanHistory } from '$lib/stores/history';
 	import { getStatusInfo } from '$lib/components/ScanStatus.svelte';
 	import { ScanStatus } from '$lib/schema/scan';
-	import type { PageData } from './$types';
 	import type { Scan, ScanStatusValue } from '$lib/schema/scan';
 	import { deleteScan } from '$lib/scan-client';
-
-	interface Props {
-		data: PageData;
-	}
-
-	let { data }: Props = $props();
 
 	// Filter and sort states
 	let statusFilter = $state<ScanStatusValue | 'all'>('all');
@@ -219,7 +213,7 @@
 									<span class="text-blue-600 dark:text-blue-400 font-medium">{scan.progress}%</span>
 								{/if}
 								<span>•</span>
-								<span>{formatDate(scan.finishedAt || scan.updatedAt || scan.createdAt)}</span>
+								<span>{formatRelativeTime(scan.finishedAt || scan.updatedAt || scan.createdAt)}</span>
 								{#if scan.finishedAt && scan.startedAt}
 									{@const duration = Math.round((getTimestamp(scan.finishedAt) - getTimestamp(scan.startedAt)) / 1000)}
 									<span>•</span>
