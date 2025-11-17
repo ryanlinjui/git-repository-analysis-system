@@ -6,29 +6,13 @@ services:
     labels:
       logging: "promtail"
       service: "app"
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - PUBLIC_FIREBASE_API_KEY=${PUBLIC_FIREBASE_API_KEY}
-      - PUBLIC_FIREBASE_AUTH_DOMAIN=${PUBLIC_FIREBASE_AUTH_DOMAIN}
-      - PUBLIC_FIREBASE_PROJECT_ID=${PUBLIC_FIREBASE_PROJECT_ID}
-      - PUBLIC_FIREBASE_STORAGE_BUCKET=${PUBLIC_FIREBASE_STORAGE_BUCKET}
-      - PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${PUBLIC_FIREBASE_MESSAGING_SENDER_ID}
-      - PUBLIC_FIREBASE_APP_ID=${PUBLIC_FIREBASE_APP_ID}
-      - PUBLIC_FIREBASE_MEASUREMENT_ID=${PUBLIC_FIREBASE_MEASUREMENT_ID}
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/service-account-file.json
-      - GEMINI_API_KEY=${GOOGLE_GENAI_API_KEY}
-      - IP_HASH_SALT=${IP_HASH_SALT}
+    env_file:
+      - .env
     volumes:
+      - ./${GOOGLE_APPLICATION_CREDENTIALS}:/app/${GOOGLE_APPLICATION_CREDENTIALS}:ro
       - /tmp/git-analysis:/tmp/git-analysis
     networks:
       - git-analysis-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
     logging:
       driver: json-file
       options:
@@ -49,8 +33,7 @@ services:
     networks:
       - git-analysis-network
     depends_on:
-      app:
-        condition: service_healthy
+      - app
     logging:
       driver: json-file
       options:
@@ -100,10 +83,9 @@ services:
       logging: "promtail"
       service: "grafana"
     ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
+      - "3001:${PORT}"
+    env_file:
+      - .env
     volumes:
       - grafana-data:/var/lib/grafana
       - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
@@ -111,6 +93,71 @@ services:
       - git-analysis-network
     depends_on:
       - loki
+      - prometheus
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: git-analysis-prometheus
+    restart: unless-stopped
+    labels:
+      logging: "promtail"
+      service: "prometheus"
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./config/prometheus-config.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - git-analysis-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: git-analysis-node-exporter
+    restart: unless-stopped
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host:ro
+    networks:
+      - git-analysis-network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: git-analysis-cadvisor
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - git-analysis-network
     logging:
       driver: json-file
       options:
@@ -127,3 +174,5 @@ volumes:
     name: git-analysis-loki-data
   grafana-data:
     name: git-analysis-grafana-data
+  prometheus-data:
+    name: git-analysis-prometheus-data

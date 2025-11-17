@@ -1,57 +1,40 @@
-FROM node:20-alpine AS builder
+# Build stage
+FROM node:22-slim AS builder
 
 WORKDIR /app
-
-# Install pnpm
 RUN npm install -g pnpm
-
-# Copy package files
 COPY package.json pnpm-lock.yaml ./
-
-# Install dependencies
 RUN pnpm install --frozen-lockfile
-
-# Copy source code
 COPY . .
 
-# Set adapter to node for Docker
+# Set build-time environment variables
 ENV SVELTEKIT_ADAPTER=node
+ENV GOOGLE_APPLICATION_CREDENTIALS=service-account-file.example.json
 
-# Build application
 RUN pnpm run build
 
 # Replace __dirname with import.meta.dirname in all .js files (fix ESM issues)
 RUN find /app/build -type f -name "*.js" -exec sed -i 's/__dirname/import.meta.dirname/g' {} \;
 
 # Production stage
-FROM node:20-alpine
+FROM node:22-slim
 
 WORKDIR /app
 
-# Install curl for health checks and git for repository cloning
-RUN apk add --no-cache curl git
+# Install git and ca-certificates for repository cloning and SSL
+RUN apt-get update && \
+    apt-get install -y git ca-certificates && \
+    update-ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy everything needed from builder
-COPY --from=builder /app/build ./build
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
-
-# Copy Firebase service account file (will be overridden by volume mount in production)
-COPY --from=builder /app/service-account-file.json ./service-account-file.json
+COPY --from=builder /app/build /app
+RUN echo '{"type": "module"}' > package.json
 
 # Create temp directory for git operations
 RUN mkdir -p /tmp/git-analysis && chmod 777 /tmp/git-analysis
 
-# Expose port
-EXPOSE 3000
-
-# Set environment
-ENV NODE_ENV=production
-ENV PORT=3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3000/api/health || exit 1
+# Force Firestore to use REST API instead of gRPC to fix disconnection issues in Docker
+ENV FIRESTORE_PREFER_REST=true
 
 # Start application
-CMD ["node", "build"]
+CMD ["node", "index.js"]
