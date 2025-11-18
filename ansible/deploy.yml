@@ -137,4 +137,4 @@
       ignore_errors: yes
       retries: 10
       delay: 20
-      until: app_health.status == 200 
+      until: app_health.status == 200
