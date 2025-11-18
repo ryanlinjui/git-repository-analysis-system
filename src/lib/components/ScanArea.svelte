@@ -5,6 +5,7 @@
 	import { anonymousUid, anonymousQuota, get_last_anonymous_scan } from '$lib/stores/anonymous';
 	import { submitScanRequest } from '$lib/scan-client';
 	import { UNLIMITED_QUOTA_FLAG } from '$lib/schema/user';
+	import { validateRepoUrl } from '$lib/validate-url';
 
 	let repoUrl = $state('');
 	let isSubmitting = $state(false);
@@ -33,8 +34,10 @@
 	async function handleSubmit(event: Event) {
 		event.preventDefault();
 		
-		if (!repoUrl.trim()) {
-			errorMessage = 'Please enter a repository URL';
+		// Validate URL on client side first
+		const validation = validateRepoUrl(repoUrl);
+		if (!validation.isValid) {
+			errorMessage = validation.error || 'Invalid repository URL';
 			return;
 		}
 
