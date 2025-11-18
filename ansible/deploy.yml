@@ -126,40 +126,15 @@
       command: docker image prune -af
       ignore_errors: yes
 
-    - name: Wait for application to be ready
-      wait_for:
-        timeout: 30
-      delegate_to: localhost
-
-    - name: Verify containers are running
-      command: docker compose ps
-      args:
-        chdir: "{{ app_dir }}"
-      register: container_status
-
-    - name: Display container status
-      debug:
-        var: container_status.stdout_lines
-
     - name: Check application health
       uri:
-        url: "http://localhost:{{ lookup('env', 'PORT') | default('3000') }}"
+        url: "https://git-repo-scanner.ryanlinjui.me"
         method: GET
         timeout: 10
-      register: health_check
+        status_code: 200
+        validate_certs: yes
+      register: app_health
       ignore_errors: yes
-      retries: 3
-      delay: 10
-
-    - name: Display deployment summary
-      debug:
-        msg:
-          - "Deployment completed successfully!"
-          - "Application directory: {{ app_dir }}"
-          - "Docker image: {{ docker_image }}"
-          - "Containers: {{ container_status.stdout_lines | length }}"
-          - "Grafana available at: http://{{ ansible_host }}:3001"
-          - "Prometheus available at: http://{{ ansible_host }}:9090"
-          - "Loki available at: http://{{ ansible_host }}:3100"
-
-    
+      retries: 10
+      delay: 20
+      until: app_health.status == 200 
