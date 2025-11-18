@@ -1,0 +1,153 @@
+---
+- name: Deploy Git Repository Analysis System
+  hosts: production
+  become: yes
+  vars:
+    app_dir: "{{ deploy_directory }}"
+    docker_image: "{{ docker_image }}"
+
+  tasks:
+    - name: Check if Docker is already installed
+      command: docker --version
+      register: docker_check
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Install prerequisites
+      apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+        update_cache: yes
+      when: docker_check.rc != 0
+
+    - name: Add Docker GPG key
+      shell: |
+        install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+        chmod a+r /etc/apt/keyrings/docker.asc
+      when: docker_check.rc != 0
+
+    - name: Add Docker repository
+      shell: |
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+      when: docker_check.rc != 0
+
+    - name: Update apt cache after adding Docker repo
+      apt:
+        update_cache: yes
+      when: docker_check.rc != 0
+
+    - name: Install Docker packages
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+      when: docker_check.rc != 0
+
+    - name: Ensure Docker service is running
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Check if .env exists on VM
+      stat:
+        path: "{{ app_dir }}/.env"
+      register: env_file
+
+    - name: Fail if .env not found
+      fail:
+        msg: "Please upload .env file to {{ app_dir }}/.env on VM before deployment"
+      when: not env_file.stat.exists
+
+    - name: Check if service account file exists on VM
+      stat:
+        path: "{{ app_dir }}/service-account-file.json"
+      register: sa_file
+
+    - name: Fail if service account file not found
+      fail:
+        msg: "Please upload service-account-file.json to {{ app_dir }}/service-account-file.json on VM before deployment"
+      when: not sa_file.stat.exists
+
+    - name: Copy docker-compose.yml
+      copy:
+        src: compose.yml
+        dest: "{{ app_dir }}/docker-compose.yml"
+        mode: '0644'
+
+    - name: Copy config directory
+      copy:
+        src: config/
+        dest: "{{ app_dir }}/config/"
+        mode: '0644'
+
+    - name: Log in to GitHub Container Registry
+      command: >
+        docker login ghcr.io -u {{ lookup('env', 'GITHUB_ACTOR') }} 
+        -p {{ lookup('env', 'GITHUB_TOKEN') }}
+      environment:
+        GITHUB_ACTOR: "{{ lookup('env', 'GITHUB_ACTOR') }}"
+        GITHUB_TOKEN: "{{ lookup('env', 'GITHUB_TOKEN') }}"
+      no_log: true
+
+    - name: Pull latest Docker image
+      docker_image:
+        name: "{{ docker_image }}"
+        source: pull
+        force_source: yes
+
+    - name: Stop existing containers
+      command: docker compose down
+      args:
+        chdir: "{{ app_dir }}"
+      ignore_errors: yes
+
+    - name: Start application with docker-compose
+      command: docker compose up -d --force-recreate
+      args:
+        chdir: "{{ app_dir }}"
+      environment:
+        COMPOSE_PROJECT_NAME: git-analysis
+
+    - name: Clean up old Docker images
+      command: docker image prune -af
+      ignore_errors: yes
+
+    - name: Read PORT from .env file
+      shell: grep '^PORT=' {{ app_dir }}/.env | cut -d '=' -f2 | tr -d '"'
+      register: app_port
+      failed_when: app_port.rc != 0 or app_port.stdout == ''
+
+    - name: Fail if PORT not found in .env
+      fail:
+        msg: "PORT is not defined in {{ app_dir }}/.env file. Please add PORT=<port-number> to .env"
+      when: app_port.stdout == ''
+
+    - name: Wait for application to be ready
+      wait_for:
+        port: "{{ app_port.stdout }}"
+        delay: 5
+        timeout: 60
+
+    - name: Check application status
+      command: docker compose ps
+      args:
+        chdir: "{{ app_dir }}"
+      register: docker_ps
+
+    - name: Display application status
+      debug:
+        var: docker_ps.stdout_lines

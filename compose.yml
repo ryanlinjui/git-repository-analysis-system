@@ -1,6 +1,6 @@
 services:
   app:
-    build: .
+    image: ghcr.io/ryanlinjui/git-repository-analysis-system:latest
     container_name: git-analysis-app
     restart: unless-stopped
     labels:

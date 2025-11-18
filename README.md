@@ -94,105 +94,87 @@ flowchart TB
     
     subgraph CICD["CI/CD Pipeline"]
         direction LR
-        Build[Build & Test]
+        Build[Build Docker Image]
         Registry[GitHub Container<br/>Registry GHCR]
+        Ansible[Ansible Playbook<br/>SSH Deployment]
     end
     
-    subgraph DockerHost["Production Server - Docker Compose"]
+    subgraph DockerHost["Production VM Docker"]
         
         subgraph TunnelContainer["Cloudflared Container"]
-            Tunnel[Cloudflare Tunnel<br/>┌─────────────┐<br/>│ SSH :22     │<br/>│ HTTP :3000  │<br/>└─────────────┘]
+            Tunnel[Cloudflare Tunnel]
         end
         
         subgraph AppContainer["App Container"]
-            App[SvelteKit Application<br/>UI Components<br/>API Routes<br/>Repository Scanner<br/>AI Analyzer]
+            App[SvelteKit Application]
         end
         
-        subgraph LogContainer["Loki Container"]
-            Loki[Log Aggregation<br/>7-day Retention]
+        subgraph Monitoring["Monitoring"]
+            Grafana[Grafana]
+            Loki[Loki]
+            Promtail[Promtail]
+            Prometheus[Prometheus]
+            NodeExporter[Node Exporter]
+            CAdvisor[cAdvisor]
         end
         
-        subgraph MonitorContainer["Grafana Container"]
-            Grafana[Monitoring Dashboard<br/>Visualization]
-        end
-        
-        subgraph CollectorContainer["Promtail Container"]
-            Promtail[Log Collector<br/>Docker Logs]
-        end
-        
-        SSH[SSH Server :22<br/>host.docker.internal]
-        
-        Network[Docker Bridge Network<br/>git-analysis-network]
+        Network[Docker Network]
     end
-    
+
     subgraph DataLayer["Data Layer"]
-        Firestore[("Firebase Firestore<br/>User Data & Scans")]
-        TempFS["Temp Storage<br/>/tmp/git-analysis"]
+        Firestore[("Firebase Firestore")]
     end
+
+    DataLayer ~~~ ExternalServices
     
     subgraph ExternalServices["External Services"]
-        GitProviders["Git Providers<br/>GitHub/GitLab/Bitbucket"]
-        GeminiAI["Google Gemini 2.0 Flash<br/>AI Code Analysis"]
+        GitProviders["Git Repository Providers"]
+        GeminiAI["Google Gemini"]
+        GitProviders ~~~ GeminiAI
     end
     
     %% User Flow - HTTP Traffic
     Users -->|HTTPS request| CDN
-    CDN -->|WebSocket| TunnelEdge
+    CDN --> TunnelEdge
     TunnelEdge -->|encrypted tunnel| Tunnel
-    Tunnel -->|HTTP to app:3000| App
-    App -->|response| Tunnel
+    Tunnel --> App
+    App --> Tunnel
     Tunnel -->|encrypted tunnel| TunnelEdge
-    TunnelEdge -->|response| CDN
+    TunnelEdge --> CDN
     CDN -->|HTTPS response| Users
     
     %% CI/CD & Deployment Flow
-    Build -->|docker push| Registry
-    GitHubActions -->|install cloudflared| GitHubActions
-    GitHubActions -->|SSH via Cloudflare| TunnelEdge
-    TunnelEdge -->|encrypted tunnel| Tunnel
-    Tunnel -->|SSH to host:22| SSH
-    SSH -->|ansible-playbook| DockerHost
-    Registry -->|docker pull| DockerHost
+    GitHubActions -->|Build & Push| Build
+    Build --> Registry
+    GitHubActions -->|Run Ansible| Ansible
+    Ansible -->|SSH :22| VMHost
+    VMHost -->|Pull| Registry
+    VMHost -->|Deploy| DockerHost
     
     %% Database Flow
-    App -->|write scans/users| Firestore
-    Firestore -->|real-time sync| App
-    
-    %% Temp Storage
-    App -->|clone & scan| TempFS
-    TempFS -->|read files| App
+    App -->|read/write| Firestore
     
     %% External API Flows
-    App -->|fetch repo metadata| GitProviders
-    GitProviders -->|JSON response| App
-    App -->|analysis prompt| GeminiAI
-    GeminiAI -->|AI insights| App
+    App -->|fetch metadata| GitProviders
+    App -->|AI analysis| GeminiAI
     
-    %% Monitoring & Logging Flow
-    AppContainer -.->|stdout/stderr| Promtail
-    TunnelContainer -.->|logs| Promtail
-    Promtail -->|push logs| Loki
-    Grafana -->|LogQL query| Loki
-    Loki -->|log data| Grafana
+    %% Monitoring Flow
+    App -.->|logs| Promtail
+    Tunnel -.->|logs| Promtail
+    Promtail --> Loki
+    Loki --> Grafana
+    Prometheus --> Grafana
+    NodeExporter -.-> Prometheus
+    CAdvisor -.-> Prometheus
     
     %% Docker Network
-    App -.->|DNS: app| Network
-    Tunnel -.->|DNS: cloudflared| Network
-    Loki -.->|DNS: loki| Network
-    Grafana -.->|DNS: grafana| Network
-    Promtail -.->|DNS: promtail| Network
-    
-    %% Network
     AppContainer -.-> Network
     TunnelContainer -.-> Network
-    LogContainer -.-> Network
-    MonitorContainer -.-> Network
-    CollectorContainer -.-> Network
+    Monitoring -.-> Network
     
     style Internet fill:#e3f2fd
     style Cloudflare fill:#fff3e0
     style CICD fill:#ffebee
-    style AnsibleRunner fill:#ffccbc
     style DockerHost fill:#c8e6c9
     style DataLayer fill:#f3e5f5
     style ExternalServices fill:#e8f5e9
@@ -206,15 +188,14 @@ flowchart TB
 git-repository-analysis-system/
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml              # CI/CD pipeline for automated deployment
+│       └── deploy.yml              # CI/CD: Build Docker image, push to GHCR, deploy via Ansible
 │
 ├── ansible/                        # Deployment automation
-│   ├── deploy.yml                  # Main deployment playbook
-│   ├── inventory.yml               # Server inventory
-│   └── templates/
-│       └── docker-compose.yml.j2   # Docker Compose template with variables
+│   ├── deploy.yml                  # Ansible playbook: install Docker, pull image, docker compose
+│   ├── inventory.yml               # Target VM inventory
+│   └── README.md                   # Deployment setup guide
 │
-├── config/                         # Monitoring & logging configuration
+├── config/                        # Monitoring & logging configuration
 │   ├── grafana-datasources.yml    # Grafana data source configuration
 │   ├── loki-config.yml            # Loki log aggregation settings
 │   └── promtail-config.yml        # Promtail log collection settings
@@ -367,24 +348,25 @@ https://github.com/dummy/test-repo
 ---
 
 ## 🚀 Deployment Guide
+### Automated CI/CD Deployment (Recommended)
 
-### Quick Deploy
+This project uses **GitHub Actions + Ansible** for automated deployment to your VM. Please refer `[.env.example](.env.example)` for required environment variables and configure [GitHub Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
 
-```bash
-docker compose up -d
-```
-
-### Redeploy
+### Manual Deployment (Local Development)
 ```bash
 docker compose down
-docker compose build --no-cache
+docker compose build
 docker compose up -d
 ```
 
-### Check status
+> `docker compose build --no-cache` forces rebuild without cache if needed.
+> Change `compose.yml` to include `build: .` under `app` service for local builds.
+    
+#### Check status
+
 ```bash
 docker compose ps
-docker compose logs -f
+docker compose logs -f app
 ```
 
 ---
