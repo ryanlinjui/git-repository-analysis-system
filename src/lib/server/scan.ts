@@ -2,7 +2,9 @@ import { adminDb } from '$lib/server/firebase';
 import { ScanStatus, ScanErrorCode } from '$lib/schema/scan';
 import { now } from '$lib/utils/date';
 import { analyzeRepository, generateRepoId } from '$lib/server/analyzer';
+import { getLatestCommitSha } from '$lib/server/git-utils';
 import { GOOGLE_GENAI_API_KEY } from './constants';
+import type { Repository } from '$lib/schema/repository';
 
 export interface ScanCreationResult {
 	success: boolean;
@@ -88,6 +90,54 @@ export async function runBackgroundAnalysis(
 			updatedAt: now()
 		});
 
+		// === SMART CACHE CHECK ===
+		// Check if we have cached analysis and if the repo has changed
+		console.log('🔍 Checking for cached analysis...');
+		const repoRef = adminDb.collection('repository').doc(repoId);
+		const existingRepoDoc = await repoRef.get();
+		
+		if (existingRepoDoc.exists) {
+			const existingRepo = existingRepoDoc.data() as Repository;
+			console.log('   ├─ Found cached analysis');
+			console.log(`   └─ Cached commit: ${existingRepo.analyzedCommit}`);
+			
+			// Get latest commit SHA from remote
+			const latestCommitSha = await getLatestCommitSha(repoUrl, existingRepo.metadata.branch);
+			
+			if (latestCommitSha && latestCommitSha === existingRepo.analyzedCommit) {
+				console.log('✅ Repository unchanged - using cached results!');
+				console.log(`   └─ Commit SHA: ${latestCommitSha}`);
+				
+				// Update scan metadata but use cached analysis
+				await scanRef.update({
+					repoFullName: existingRepo.metadata.fullName,
+					status: ScanStatus.SUCCEEDED,
+					progress: 100,
+					finishedAt: now(),
+					updatedAt: now()
+				});
+				
+				// Update repository's scan metadata
+				await repoRef.update({
+					totalScans: (existingRepo.totalScans || 1) + 1,
+					lastScannedAt: now(),
+					updatedAt: now()
+				});
+				
+				return; // Skip analysis, use cached data
+			}
+			
+			console.log('🔄 Repository has changed - running fresh analysis');
+			if (latestCommitSha) {
+				console.log(`   ├─ Old commit: ${existingRepo.analyzedCommit}`);
+				console.log(`   └─ New commit: ${latestCommitSha}`);
+			} else {
+				console.log('   └─ Unable to verify commit SHA, re-analyzing to be safe');
+			}
+		} else {
+			console.log('📦 First time analyzing this repository');
+		}
+
 		// Run analysis with cancellation checks
 		let cancelRequested = false;
 		
@@ -120,9 +170,19 @@ export async function runBackgroundAnalysis(
 				return;
 			}
 
-			// Save repository data
-			const repoRef = adminDb.collection('repository').doc(repoId);
-			await repoRef.set(result);
+			// Save repository data (overwrite if exists)
+			// If updating existing repo, increment totalScans
+			const existingRepoDoc = await repoRef.get();
+			const totalScans = existingRepoDoc.exists 
+				? ((existingRepoDoc.data() as Repository).totalScans || 1) + 1 
+				: 1;
+			
+			await repoRef.set({
+				...result,
+				totalScans,
+				lastScannedAt: now(),
+				updatedAt: now()
+			});
 
 			// Mark scan as succeeded and update repoFullName
 			await scanRef.update({

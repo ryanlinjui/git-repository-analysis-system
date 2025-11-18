@@ -246,6 +246,36 @@ export async function getAllFiles(
 }
 
 /**
+ * Get latest commit SHA from remote repository without full clone
+ * Uses git ls-remote to quickly check the latest commit
+ */
+export async function getLatestCommitSha(
+	repoUrl: string,
+	branch: string = 'main'
+): Promise<string | null> {
+	try {
+		// Try the specified branch first
+		const { stdout } = await execAsync(`git ls-remote "${repoUrl}" "${branch}"`);
+		if (stdout.trim()) {
+			const sha = stdout.split('\t')[0];
+			return sha;
+		}
+		
+		// If branch not found, try HEAD
+		const { stdout: headOutput } = await execAsync(`git ls-remote "${repoUrl}" HEAD`);
+		if (headOutput.trim()) {
+			const sha = headOutput.split('\t')[0];
+			return sha;
+		}
+		
+		return null;
+	} catch (error) {
+		console.warn('Failed to get latest commit SHA:', error);
+		return null;
+	}
+}
+
+/**
  * Clean up cloned repository
  */
 export async function cleanupRepo(repoDir: string): Promise<void> {
