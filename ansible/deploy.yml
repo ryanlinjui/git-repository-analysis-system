@@ -126,21 +126,67 @@
       command: docker image prune -af
       ignore_errors: yes
 
-    - name: Read PORT from .env file
-      shell: grep '^PORT=' {{ app_dir }}/.env | cut -d '=' -f2 | tr -d '"'
-      register: app_port
-      failed_when: app_port.rc != 0 or app_port.stdout == ''
+    - name: Wait for all containers to be running
+      shell: |
+        EXPECTED=$(docker compose config --services | wc -l)
+        RUNNING=$(docker compose ps --status running --format json 2>/dev/null | jq -s 'length')
+        [ "$RUNNING" -eq "$EXPECTED" ]
+      args:
+        chdir: "{{ app_dir }}"
+      register: containers_running
+      until: containers_running.rc == 0
+      retries: 24
+      delay: 5
 
-    - name: Fail if PORT not found in .env
-      fail:
-        msg: "PORT is not defined in {{ app_dir }}/.env file. Please add PORT=<port-number> to .env"
-      when: app_port.stdout == ''
+    - name: Check container health status
+      shell: |
+        docker compose ps --format json | jq -r '.[] | select(.Health != "" and .Health != "healthy") | .Name' | wc -l
+      args:
+        chdir: "{{ app_dir }}"
+      register: unhealthy_count
+      failed_when: false
 
-    - name: Wait for application to be ready
-      wait_for:
-        port: "{{ app_port.stdout }}"
-        delay: 5
-        timeout: 60
+    - name: Get app container port mapping
+      shell: docker compose ps app --format json | jq -r '.[0].Publishers[0].PublishedPort // "3000"'
+      args:
+        chdir: "{{ app_dir }}"
+      register: app_published_port
+      changed_when: false
+      failed_when: false
+
+    - name: Test application HTTP endpoint from host
+      uri:
+        url: "http://localhost:{{ app_published_port.stdout }}"
+        method: GET
+        status_code: 200
+        timeout: 10
+      register: app_health
+      until: app_health.status == 200
+      retries: 12
+      delay: 5
+      when: app_published_port.stdout != ''
+      failed_when: false
+
+    - name: Test application via docker network (fallback)
+      shell: docker run --rm --network git-analysis_default curlimages/curl:latest curl -f -s http://app:3000 > /dev/null
+      register: app_network_health
+      until: app_network_health.rc == 0
+      retries: 6
+      delay: 5
+      when: app_health is failed or app_published_port.stdout == ''
+      ignore_errors: yes
+
+    - name: Verify Grafana is accessible
+      uri:
+        url: "http://localhost:3001"
+        method: GET
+        status_code: 200,302
+        timeout: 10
+      register: grafana_health
+      until: grafana_health.status in [200, 302]
+      retries: 6
+      delay: 5
+      ignore_errors: yes
 
     - name: Check application status
       command: docker compose ps
@@ -151,3 +197,12 @@
     - name: Display application status
       debug:
         var: docker_ps.stdout_lines
+
+    - name: Display health summary
+      debug:
+        msg: 
+          - "All containers running: {{ containers_running.rc == 0 }}"
+          - "Unhealthy containers: {{ unhealthy_count.stdout }}"
+          - "App port detected: {{ app_published_port.stdout | default('N/A') }}"
+          - "App HTTP responding: {{ app_health.status == 200 if app_health is defined and app_health.status is defined else (app_network_health.rc == 0 if app_network_health is defined else 'N/A') }}"
+          - "Grafana responding: {{ grafana_health.status in [200, 302] if grafana_health is defined and grafana_health.status is defined else 'N/A' }}"
