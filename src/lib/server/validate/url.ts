@@ -1,17 +1,13 @@
 import { z } from 'zod';
 
-/**
- * URL validation result
- */
+// URL validation result
 export interface UrlValidationResult {
 	isValid: boolean;
 	repoUrl?: string;
 	error?: string;
 }
 
-/**
- * Scan Request Schema with comprehensive validation
- */
+// Scan Request Schema with comprehensive validation
 export const ScanRequestSchema = z.object({
 	repoUrl: z.string()
 		.trim()
@@ -58,9 +54,7 @@ export const ScanRequestSchema = z.object({
 		)
 });
 
-/**
- * Validate repository URL from request body
- */
+// Validate repository URL from request body
 export function validateRepoUrl(body: any): UrlValidationResult {
 	try {
 		const validation = ScanRequestSchema.safeParse(body);

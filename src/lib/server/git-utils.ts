@@ -200,9 +200,7 @@ export async function getRepoMetadata(
 	};
 }
 
-/**
- * Get all files in directory recursively
- */
+// Get all files in directory recursively
 export async function getAllFiles(
 	dir: string,
 	baseDir: string = dir,
@@ -275,9 +273,7 @@ export async function getLatestCommitSha(
 	}
 }
 
-/**
- * Clean up cloned repository
- */
+// Clean up cloned repository
 export async function cleanupRepo(repoDir: string): Promise<void> {
 	try {
 		await fs.rm(repoDir, { recursive: true, force: true });

@@ -13,9 +13,62 @@ export interface ScanCreationResult {
 	error?: string;
 }
 
-/**
- * Create a scan record in Firestore
- */
+// Check if we can use cached analysis results and apply if available
+async function checkAndApplySmartCache(
+	repoUrl: string,
+	scanRef: FirebaseFirestore.DocumentReference,
+	repoRef: FirebaseFirestore.DocumentReference
+): Promise<boolean> {
+	console.log('🔍 Checking for cached analysis...');
+	const existingRepoDoc = await repoRef.get();
+	
+	if (!existingRepoDoc.exists) {
+		console.log('📦 First time analyzing this repository');
+		return false;
+	}
+	
+	const existingRepo = existingRepoDoc.data() as Repository;
+	console.log('   ├─ Found cached analysis');
+	console.log(`   └─ Cached commit: ${existingRepo.analyzedCommit}`);
+	
+	// Get latest commit SHA from remote
+	const latestCommitSha = await getLatestCommitSha(repoUrl, existingRepo.metadata.branch);
+	
+	if (latestCommitSha && latestCommitSha === existingRepo.analyzedCommit) {
+		console.log('✅ Repository unchanged - using cached results!');
+		console.log(`   └─ Commit SHA: ${latestCommitSha}`);
+		
+		// Update scan metadata but use cached analysis
+		await scanRef.update({
+			repoFullName: existingRepo.metadata.fullName,
+			status: ScanStatus.SUCCEEDED,
+			progress: 100,
+			finishedAt: now(),
+			updatedAt: now()
+		});
+		
+		// Update repository's scan metadata
+		await repoRef.update({
+			totalScans: (existingRepo.totalScans || 1) + 1,
+			lastScannedAt: now(),
+			updatedAt: now()
+		});
+		
+		return true; // Cache was used
+	}
+	
+	console.log('🔄 Repository has changed - running fresh analysis');
+	if (latestCommitSha) {
+		console.log(`   ├─ Old commit: ${existingRepo.analyzedCommit}`);
+		console.log(`   └─ New commit: ${latestCommitSha}`);
+	} else {
+		console.log('   └─ Unable to verify commit SHA, re-analyzing to be safe');
+	}
+	
+	return false; // Cache not used, need fresh analysis
+}
+
+// Create a scan record in Firestore
 export async function handleScanSubmission(
 	repoUrl: string,
 	uid: string
@@ -55,15 +108,14 @@ export async function handleScanSubmission(
 	}
 }
 
-/**
- * Run background analysis for a scan
- */
+// Run background analysis for a scan
 export async function runBackgroundAnalysis(
 	scanId: string,
 	repoUrl: string
 ): Promise<void> {
 	const scanRef = adminDb.collection('scans').doc(scanId);
 	const repoId = generateRepoId(repoUrl);
+	const repoRef = adminDb.collection('repository').doc(repoId);
 	
 	// Check if scan was cancelled
 	const isCancelled = async (): Promise<boolean> => {
@@ -90,52 +142,9 @@ export async function runBackgroundAnalysis(
 			updatedAt: now()
 		});
 
-		// === SMART CACHE CHECK ===
-		// Check if we have cached analysis and if the repo has changed
-		console.log('🔍 Checking for cached analysis...');
-		const repoRef = adminDb.collection('repository').doc(repoId);
-		const existingRepoDoc = await repoRef.get();
-		
-		if (existingRepoDoc.exists) {
-			const existingRepo = existingRepoDoc.data() as Repository;
-			console.log('   ├─ Found cached analysis');
-			console.log(`   └─ Cached commit: ${existingRepo.analyzedCommit}`);
-			
-			// Get latest commit SHA from remote
-			const latestCommitSha = await getLatestCommitSha(repoUrl, existingRepo.metadata.branch);
-			
-			if (latestCommitSha && latestCommitSha === existingRepo.analyzedCommit) {
-				console.log('✅ Repository unchanged - using cached results!');
-				console.log(`   └─ Commit SHA: ${latestCommitSha}`);
-				
-				// Update scan metadata but use cached analysis
-				await scanRef.update({
-					repoFullName: existingRepo.metadata.fullName,
-					status: ScanStatus.SUCCEEDED,
-					progress: 100,
-					finishedAt: now(),
-					updatedAt: now()
-				});
-				
-				// Update repository's scan metadata
-				await repoRef.update({
-					totalScans: (existingRepo.totalScans || 1) + 1,
-					lastScannedAt: now(),
-					updatedAt: now()
-				});
-				
-				return; // Skip analysis, use cached data
-			}
-			
-			console.log('🔄 Repository has changed - running fresh analysis');
-			if (latestCommitSha) {
-				console.log(`   ├─ Old commit: ${existingRepo.analyzedCommit}`);
-				console.log(`   └─ New commit: ${latestCommitSha}`);
-			} else {
-				console.log('   └─ Unable to verify commit SHA, re-analyzing to be safe');
-			}
-		} else {
-			console.log('📦 First time analyzing this repository');
+		const usedCache = await checkAndApplySmartCache(repoUrl, scanRef, repoRef);
+		if (usedCache) {
+			return; // Skip analysis, used cached data
 		}
 
 		// Run analysis with cancellation checks

@@ -116,7 +116,7 @@ ${fileList}
 
 ${configFiles ? `## Configuration Files\n${configFiles}\n` : ''}
 
-## Source Code Samples (Top 25 Files)
+## Source Code Samples (Top ${MAX_SOURCE_FILES} Files)
 ${sampleFiles}
 
 ${testFiles ? `## Test Files\n${testFiles}\n` : ''}

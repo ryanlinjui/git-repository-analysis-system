@@ -6,7 +6,7 @@ import type { Repository, TechStackItem, FileStats, StructureAnalysis, CodeQuali
  */
 
 // AI model configuration
-export const AI_MODEL = 'gemini-2.5-flash';
+export const AI_MODEL = 'gemini-2.0-flash';
 export const GOOGLE_GENAI_API_KEY = env.GOOGLE_GENAI_API_KEY || '';
 
 /**
