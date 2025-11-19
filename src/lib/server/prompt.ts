@@ -1,5 +1,15 @@
 import type { RepoSnapshot } from './constants';
 
+const MAX_FILE_LIST_COUNT = 100; 				// Maximum number of files to include in the file structure overview
+const MAX_SOURCE_FILES = 25; 					// Maximum number of important source files to sample
+const MAX_SOURCE_FILE_CONTENT_LENGTH = 1200; 	// Maximum characters to sample from each source file
+const MAX_CONFIG_FILES = 10; 					// Maximum number of configuration files to include
+const MAX_CONFIG_FILE_CONTENT_LENGTH = 2000; 	// Maximum characters to sample from each configuration file
+const MAX_TEST_FILES = 5; 						// Maximum number of test files to include
+const MAX_TEST_FILE_CONTENT_LENGTH = 800; 		// Maximum characters to sample from each test file
+const MAX_CI_FILE_CONTENT_LENGTH = 600; 		// Maximum characters to sample from each CI/CD configuration file
+const MAX_README_CONTENT_LENGTH = 4000; 		// Maximum characters to include from README file
+
 /**
  * Generate comprehensive single-stage AI analysis prompt
  * AI analyzes everything in one go - more accurate and efficient
@@ -9,7 +19,7 @@ export function generateComprehensiveAnalysisPrompt(snapshot: RepoSnapshot): str
 
 	// Get file structure overview
 	const fileList = files
-		.slice(0, 100) // Limit to first 100 files for overview
+		.slice(0, MAX_FILE_LIST_COUNT)
 		.map(f => `- ${f.path} (${f.lines} lines, ${f.size} bytes)`)
 		.join('\n');
 
@@ -34,8 +44,8 @@ export function generateComprehensiveAnalysisPrompt(snapshot: RepoSnapshot): str
 		})
 		.filter(f => !f.path.includes('node_modules'))
 		.filter(f => !f.path.includes('.min.'))
-		.slice(0, 25) // Top 25 source files
-		.map(f => `### ${f.path}\n\`\`\`\n${f.content.slice(0, 1200)}\n\`\`\``)
+		.slice(0, MAX_SOURCE_FILES)
+		.map(f => `### ${f.path}\n\`\`\`\n${f.content.slice(0, MAX_SOURCE_FILE_CONTENT_LENGTH)}\n\`\`\``)
 		.join('\n\n');
 
 	// Get config files (package.json, tsconfig.json, etc.)
@@ -55,8 +65,8 @@ export function generateComprehensiveAnalysisPrompt(snapshot: RepoSnapshot): str
 				name.includes('config') && name.endsWith('.json')
 			);
 		})
-		.slice(0, 10)
-		.map(f => `### ${f.path}\n\`\`\`\n${f.content.slice(0, 2000)}\n\`\`\``)
+		.slice(0, MAX_CONFIG_FILES)
+		.map(f => `### ${f.path}\n\`\`\`\n${f.content.slice(0, MAX_CONFIG_FILE_CONTENT_LENGTH)}\n\`\`\``)
 		.join('\n\n');
 
 	// Get test files
@@ -69,8 +79,8 @@ export function generateComprehensiveAnalysisPrompt(snapshot: RepoSnapshot): str
 				name.includes('__tests__')
 			);
 		})
-		.slice(0, 5)
-		.map(f => `### ${f.path}\n\`\`\`\n${f.content.slice(0, 800)}\n\`\`\``)
+		.slice(0, MAX_TEST_FILES)
+		.map(f => `### ${f.path}\n\`\`\`\n${f.content.slice(0, MAX_TEST_FILE_CONTENT_LENGTH)}\n\`\`\``)
 		.join('\n\n');
 
 	// Get CI/CD files
@@ -85,7 +95,7 @@ export function generateComprehensiveAnalysisPrompt(snapshot: RepoSnapshot): str
 				name.includes('.circleci')
 			);
 		})
-		.map(f => `### ${f.path}\n\`\`\`\n${f.content.slice(0, 600)}\n\`\`\``)
+		.map(f => `### ${f.path}\n\`\`\`\n${f.content.slice(0, MAX_CI_FILE_CONTENT_LENGTH)}\n\`\`\``)
 		.join('\n\n');
 
 	return `You are an expert software architect and code analyst. Analyze this Git repository comprehensively and provide detailed insights.
@@ -99,14 +109,14 @@ export function generateComprehensiveAnalysisPrompt(snapshot: RepoSnapshot): str
 ${metadata.stars !== null ? `- **Stars**: ${metadata.stars}` : ''}
 ${metadata.forks !== null ? `- **Forks**: ${metadata.forks}` : ''}
 
-${readme ? `## README\n\`\`\`markdown\n${readme.slice(0, 4000)}\n\`\`\`\n` : ''}
+${readme ? `## README\n\`\`\`markdown\n${readme.slice(0, MAX_README_CONTENT_LENGTH)}\n\`\`\`\n` : ''}
 
 ## File Structure Overview
 ${fileList}
 
 ${configFiles ? `## Configuration Files\n${configFiles}\n` : ''}
 
-## Source Code Samples (Top 25 Files)
+## Source Code Samples (Top ${MAX_SOURCE_FILES} Files)
 ${sampleFiles}
 
 ${testFiles ? `## Test Files\n${testFiles}\n` : ''}
@@ -133,10 +143,13 @@ Analyze this repository **thoroughly** and provide a comprehensive JSON response
    - Determine versions from config files
 
 3. **Analyze File Statistics**:
+   - Count ONLY source code files (exclude images, audio, video, fonts, binaries, etc.)
    - Count files by **actual language used**, not just extensions
    - For example, .ts files might be config files, not TypeScript code
    - Ignore generated/minified files
    - Calculate total lines of actual source code
+   - **IMPORTANT**: totalLines MUST equal the sum of all values in languageBreakdown
+   - Double-check: sum(languageBreakdown values) = totalLines
 
 4. **Examine Project Structure**:
    - Check if tests **actually exist and are meaningful**
@@ -148,7 +161,8 @@ Analyze this repository **thoroughly** and provide a comprehensive JSON response
    - Look for best practices, patterns, error handling
    - Check test coverage indicators
    - Evaluate code organization and architecture
-   - Find real issues, not generic complaints
+   - For issues: Only list REAL problems you can identify. If code quality is good, use empty array []
+   - Don't fabricate issues - it's OK to have no issues if the code is well-written
 
 6. **Determine Complexity & Skill Level**:
    - Consider architectural patterns used
@@ -183,6 +197,8 @@ Return **ONLY** this JSON object (no markdown, no extra text):
       "JavaScript": 3000,
       "CSS": 1000
     }
+    // NOTE: totalLines MUST equal sum of languageBreakdown values (5000 + 3000 + 1000 = 9000)
+    // Only count source code files, exclude media files, binaries, fonts, etc.
   },
   
   "structure": {
@@ -198,14 +214,13 @@ Return **ONLY** this JSON object (no markdown, no extra text):
   
   "codeQuality": {
     "score": 85,
-    "issues": [
-      "Issue 1",
-      "Issue 2"
-    ],
+    "issues": [],
     "strengths": [
       "Strength 1",
       "Strength 2"
     ]
+    // NOTE: issues can be an empty array [] if no significant problems are found
+    // Only include real issues, don't fabricate problems just to fill the array
   },
   
   "skillLevel": "mid-level",

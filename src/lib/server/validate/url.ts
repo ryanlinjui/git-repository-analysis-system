@@ -1,25 +1,21 @@
 import { z } from 'zod';
 
-/**
- * URL validation result
- */
+// URL validation result
 export interface UrlValidationResult {
 	isValid: boolean;
 	repoUrl?: string;
 	error?: string;
 }
 
-/**
- * Scan Request Schema with comprehensive validation
- */
+// Scan Request Schema with comprehensive validation
 export const ScanRequestSchema = z.object({
 	repoUrl: z.string()
 		.trim()
 		.min(1, 'Repository URL is required')
 		.url('Invalid URL format')
 		.regex(
-			/^https:\/\/(github\.com|gitlab\.com|bitbucket\.org)\//,
-			'URL must be from GitHub, GitLab, or Bitbucket'
+			/^https:\/\//,
+			'Server: URL must use HTTPS protocol'
 		)
 		.max(500, 'URL is too long')
 		.refine(
@@ -37,7 +33,7 @@ export const ScanRequestSchema = z.object({
 					url.toLowerCase().includes(pattern)
 				);
 			},
-			{ message: 'URL contains invalid characters' }
+			{ message: 'Server: URL contains invalid characters' }
 		)
 		.refine(
 			(url) => {
@@ -54,13 +50,11 @@ export const ScanRequestSchema = z.object({
 				];
 				return !BLOCKED_HOSTS.some(pattern => pattern.test(url));
 			},
-			{ message: 'URL is blocked for security reasons' }
+			{ message: 'Server: URL is blocked for security reasons' }
 		)
 });
 
-/**
- * Validate repository URL from request body
- */
+// Validate repository URL from request body
 export function validateRepoUrl(body: any): UrlValidationResult {
 	try {
 		const validation = ScanRequestSchema.safeParse(body);

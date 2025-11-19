@@ -1,11 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { AnalysisResult } from './constants';
+import { AI_MODEL } from './constants';
 
 let genAI: GoogleGenerativeAI | null = null;
 
-/**
- * Initialize Gemini AI client
- */
+// Initialize Gemini AI client
 export function initializeGemini(apiKey: string) {
 	if (!genAI) {
 		genAI = new GoogleGenerativeAI(apiKey);
@@ -13,15 +12,13 @@ export function initializeGemini(apiKey: string) {
 	return genAI;
 }
 
-/**
- * Analyze repository using Gemini AI
- */
+// Analyze repository using Gemini AI
 export async function analyzeWithGemini(
 	prompt: string,
 	apiKey: string
 ): Promise<AnalysisResult> {
 	const ai = initializeGemini(apiKey);
-	const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash' });
+	const model = ai.getGenerativeModel({ model: AI_MODEL });
 
 	try {
 		const result = await model.generateContent(prompt);

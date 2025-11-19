@@ -18,6 +18,7 @@ export const TEMP_DIR_PREFIX = '/tmp/repo-analysis-';
 
 // Files/directories to ignore during analysis (to avoid sending garbage to AI)
 export const IGNORE_PATTERNS = [
+	// Dependencies and build outputs
 	/node_modules/,
 	/\.git/,
 	/dist/,
@@ -40,6 +41,19 @@ export const IGNORE_PATTERNS = [
 	/\.min\.js$/, // Minified files
 	/\.bundle\.js$/, // Bundled files
 	/\.map$/, // Source maps
+	
+	// Media files (images, audio, video)
+	/\.(jpg|jpeg|png|gif|svg|ico|webp|bmp|tiff)$/i,
+	/\.(mp3|wav|ogg|flac|aac|m4a)$/i,
+	/\.(mp4|avi|mov|wmv|flv|webm|mkv)$/i,
+	
+	// Binary and compiled files
+	/\.(exe|dll|so|dylib|bin|obj|o|a|lib)$/i,
+	/\.(zip|tar|gz|rar|7z|bz2|xz)$/i,
+	/\.(pdf|doc|docx|xls|xlsx|ppt|pptx)$/i,
+	
+	// Font files
+	/\.(woff|woff2|ttf|eot|otf)$/i,
 ];
 
 /**
