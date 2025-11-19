@@ -17,7 +17,7 @@
 ## ✨ Features
 
 **🤖 AI-Powered Repository Analysis**
-- Paste any GitHub/GitLab/Bitbucket URL and get instant AI insights
+- Paste any public GitHub/GitLab/Bitbucket URL and get instant AI insights
 - Analyzes tech stack, code quality, complexity, and skill level
 - Powered by Google Gemini
 
