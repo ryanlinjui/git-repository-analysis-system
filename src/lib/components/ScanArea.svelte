@@ -5,7 +5,7 @@
 	import { anonymousUid, anonymousQuota, get_last_anonymous_scan } from '$lib/stores/anonymous';
 	import { submitScanRequest } from '$lib/scan-client';
 	import { UNLIMITED_QUOTA_FLAG } from '$lib/schema/user';
-	import { validateRepoUrl } from '$lib/validate-url';
+	import { validateRepoUrl } from '$lib/utils/client-validate-url';
 
 	let repoUrl = $state('');
 	let isSubmitting = $state(false);

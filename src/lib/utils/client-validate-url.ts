@@ -1,17 +1,8 @@
-/**
- * Client-side URL validation
- * Mirrors server-side validation for immediate user feedback
- */
-
 export interface ValidationResult {
 	isValid: boolean;
 	error?: string;
 }
 
-/**
- * Validate repository URL on the client side
- * This provides immediate feedback before making API calls
- */
 export function validateRepoUrl(url: string): ValidationResult {
 	// Check if URL is empty
 	const trimmedUrl = url.trim();
